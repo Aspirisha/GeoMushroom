@@ -1,2 +1,5 @@
 .idea
+.tmp
+.models
+__pycache__
 tokens.txt
