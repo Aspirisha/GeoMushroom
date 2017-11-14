@@ -1,5 +1,5 @@
 import time
-from os.path import dirname, join
+from os.path import join
 from urllib import request
 
 import vk
@@ -8,8 +8,6 @@ from vk.exceptions import VkAPIError
 import classify_image
 from common import *
 
-root_dir = dirname(__file__)
-data_dir = join(root_dir, "..", "data")
 TIME_TO_SLEEP = 0.35
 TEMP_DIR = ".tmp"
 
@@ -18,6 +16,8 @@ class VkScrapper:
     def __init__(self, vkapi, minp, maxp):
         self.vkapi = vkapi
         self.keywords = {'mushroom', 'bolete', 'fungus'}
+
+        #currently unused
         self.minp = minp
         self.maxp = maxp
         self.city_by_id = {}
@@ -107,8 +107,7 @@ class VkScrapper:
 
 
 def main():
-    APP_ID = '6256422'
-    with open(join(root_dir, 'tokens.txt')) as f:
+    with open('tokens.txt') as f:
         tokens = [l.strip() for l in f]
 
     if len(tokens) == 0:
@@ -121,7 +120,6 @@ def main():
     minp = (59.157162, 28.066060)
     maxp = (60.571626, 31.536363)
     keywords = ['грибы', 'грибники', 'грибочки']
-    user = 9941496
     with VkScrapper(vkapi, minp, maxp) as scrapper:
         scrapper.get_locations_by_groups(keywords)
 
