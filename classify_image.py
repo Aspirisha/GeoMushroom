@@ -32,7 +32,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import argparse
 import os.path
 import re
 import sys
@@ -141,7 +140,7 @@ class ImageTagger:
           image: Image file name.
 
         Returns:
-          Nothing
+          dict with top K prediction labels as keys and corresponding scores as values
         """
         if not tf.gfile.Exists(image):
             tf.logging.fatal('File does not exist %s', image)
