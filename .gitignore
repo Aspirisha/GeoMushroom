@@ -1,6 +1,7 @@
 .idea
 .tmp
 .models
+.cache
 __pycache__
 tokens.txt
 output

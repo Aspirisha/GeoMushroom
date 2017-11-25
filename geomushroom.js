@@ -5,13 +5,18 @@ var interest_polygon = [
           {lat: 59.157162, lng: 31.536363},
           {lat: 59.157162, lng: 28.066060}];
 var heatmap_points = [];
-/**
-   * The CenterControl adds a control to the map that recenters the map on
-   * Chicago.
-   * This constructor takes the control DIV as an argument.
-   * @constructor
-   */
-function StartControl(controlDiv, map, socket) {
+
+
+function getInterestRegionStr(bermudaTriangle) {
+    var len = bermudaTriangle.getPath().getLength();
+    var htmlStr = "";
+    for (var i = 0; i < len; i++) {
+        htmlStr += bermudaTriangle.getPath().getAt(i).toUrlValue(5) + ";";
+    }
+    return htmlStr;
+}
+
+function StartControl(controlDiv, map, bermudaTriangle, socket) {
     // Set CSS for the control border.
     var controlUI = document.createElement('div');
     controlUI.style.backgroundColor = '#fff';
@@ -37,13 +42,17 @@ function StartControl(controlDiv, map, socket) {
 
     // Setup the click event listeners: simply set the map to Chicago.
     controlUI.addEventListener('click', function() {
-    socket.send('Start\n');
+        var command = "";
+        if (controlText.innerHTML == "Start") {
+            controlText.innerHTML = "Stop";
+            command = 'Start ';
+            command += getInterestRegionStr(bermudaTriangle) + "\n";
+        } else {
+            controlText.innerHTML = "Start";
+            command = 'Stop\n';
+        }
 
-    if (controlText.innerHTML == "Start") {
-        controlText.innerHTML = "Stop";
-    } else {
-        controlText.innerHTML = "Start";
-    }
+        socket.send(command);
   });
 
 }
@@ -119,16 +128,11 @@ function initialize() {
 
     // open the socket
     socket.onopen = function(event) {
-    socket.send('connected\n');
     // show server response
     socket.onmessage = function(e) {
-        document.getElementById("entry").value = e.data;
+        // TODO
     }
 
-    // for each typed key send #entry's text to server
-    document.getElementById("entry").onkeyup = (function (e) {
-        socket.send(document.getElementById("entry").value+"\n");
-    });
     }
 
 
@@ -176,7 +180,7 @@ function initialize() {
        	var len = bermudaTriangle.getPath().getLength();
        	var htmlStr = "";
         for (var i = 0; i < len; i++) {
-            htmlStr += bermudaTriangle.getPath().getAt(i).toUrlValue(5) + "\n";
+            htmlStr += bermudaTriangle.getPath().getAt(i).toUrlValue(5) + " ";
         }
         //alert(htmlStr);
     }   
@@ -245,7 +249,7 @@ function initialize() {
     var startControlDiv = document.createElement('div');
     startControlDiv.setAttribute('horizontal', '');
     startControlDiv.setAttribute('layout', '');
-    var startControl = new StartControl(startControlDiv, map, socket);
+    var startControl = new StartControl(startControlDiv, map, bermudaTriangle, socket);
     var loadControl = new LoadLocalDataControl(startControlDiv, map, socket);
     map.controls[google.maps.ControlPosition.TOP_RIGHT].push(startControlDiv);
 }

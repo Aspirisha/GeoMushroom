@@ -22,7 +22,7 @@ class Protocol(protocol.Protocol):
         self.pp = ProcessProtocol()
         self.pp.factory = self
         reactor.spawnProcess(self.pp, sys.executable,
-                             [sys.executable, '-u', 'client.py'])
+                             [sys.executable, '-u', 'main.py'])
     def dataReceived(self, data):
         log.msg("redirect received data to process' stdin: %r" % data)
         self.pp.transport.write(data)
@@ -38,10 +38,10 @@ class ProcessProtocol(protocol.ProcessProtocol):
         log.msg("connectionMade")
     def outReceived(self, data):
         log.msg("send stdout back %r" % data)
-        self._sendback(data)
+        #self._sendback(data)
     def errReceived(self, data):
-        log.msg("send stderr back %r" % data)
-        self._sendback(data)
+        log.msg("send stderr back %r" % data.decode('utf-8'))
+        #self._sendback(data)
     def processExited(self, reason):
         log.msg("processExited")
     def processEnded(self, reason):
