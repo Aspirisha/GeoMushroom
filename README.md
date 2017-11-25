@@ -7,6 +7,7 @@ This is (or will be once) just a mushroom heatmap built on top of vk geotagged p
 You need to have: 
 * access to the internet
 * python 3.x 
+* [twisted](https://twistedmatrix.com/trac/)
 
 Following python packages:
 * tensorflow
@@ -17,9 +18,13 @@ Following python packages:
 1. Copy text from get_token.txt into your browser address bar.
 2. Press enter. Vk token will be generated and displayed in the address bar. Copy it to clipboard.
 3. Paste token into file tokens.txt
-4. Run from command line: `python main.py`. This will start vk groups traversal aimed to find geotagged photos of mushrooms.
-5. When you are bored, press ctrl+c. Anyway, after previous command finished execution, you can watch the results by calling `python visualizer.py`. This will generate html file **output/mushrooms_heatmap.html**  with google map mushrooms heatmap based on retrieved geotags. 
-6. Go and gather mushrooms.
+4. Run from command line: `twistd -ny server.py`. This will start scrapper server.
+5. Open geomushroom.html which lies in the root directory. This is the user interface to control scrapper. 
+Controls are placed in the top right corner. You can set region of interest (ROI) by moving the red polygon on the map.
+When scrapping, server will interactively populate map with gathered data by drawing heatmap and putting markers with detected photos 
+at geolocations with mushrooms. 
+
+Gathered data is cached so that you won't need to rerun scrapping every time.
 
 P.S. detected mushrooms can be poisonous. Use at your own risk.
 
