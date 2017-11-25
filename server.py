@@ -1,23 +1,21 @@
 #!/usr/bin/python
-"""WebSocket CLI interface.
-Install: pip install twisted txws
-Run: twistd -ny wscli.py
-Visit http://localhost:8084/
 """
+Run: twistd -ny server.py
+"""
+import os
+import sys
 from threading import Thread
 
 import vk
 from twisted.application import service
 from twisted.application import strports  # pip install twisted
 from twisted.internet import protocol
-from twisted.internet.protocol import Factory
 from twisted.python import log
 from txws import WebSocketFactory  # pip install txws
-import os
-import sys
+from scrapper import VkScrapper
+
 dir_path = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(dir_path)
-from scrapper import VkScrapper
 
 
 class Protocol(protocol.Protocol):
@@ -86,7 +84,6 @@ class Protocol(protocol.Protocol):
         elif key == 'stop':
             print('stopping...')
             self.scrapper.stop()
-
 
     def __on_found_latlon(self, lat, lon, url):
         self._send("LATLONS {} {} {}".format(lat, lon, url))

@@ -13,6 +13,8 @@ Following python packages:
 * tensorflow
 * vk
 * numpy
+* pyproj
+* shapely
 
 ### How To Use
 1. Copy text from get_token.txt into your browser address bar.
@@ -28,6 +30,9 @@ Gathered data is cached so that you won't need to rerun scrapping every time.
 
 P.S. detected mushrooms can be poisonous. Use at your own risk.
 
+<center>Result example</center>
+
+![Alt text](resources/sample.png?raw=true "Title")
 ### References
 This project is backed by inception model, borrowed from [here](http://download.tensorflow.org/models/image/imagenet/inception-2015-12-05.tgz)
 

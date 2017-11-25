@@ -1,21 +1,17 @@
-import time
-from os.path import join
-from urllib import request
-import argparse
-from threading import Thread
-from time import sleep
-import sys
 import hashlib
+import time
+from functools import partial
+from os.path import join
+from time import sleep
+from urllib import request
+
 import pyproj
 from shapely.geometry import Polygon, Point
 from shapely.ops import transform
-from functools import partial
-
 from vk.exceptions import VkAPIError
 
 import classify_image
 from common import *
-
 
 TIME_TO_SLEEP = 0.35
 TEMP_DIR = ".tmp"
