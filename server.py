@@ -12,10 +12,10 @@ from twisted.application import strports  # pip install twisted
 from twisted.internet import protocol
 from twisted.python import log
 from txws import WebSocketFactory  # pip install txws
-from scrapper import VkScrapper
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(dir_path)
+from scrapper import VkScrapper
 
 
 class Protocol(protocol.Protocol):
@@ -73,6 +73,7 @@ class Protocol(protocol.Protocol):
 
             if not self.loaded_local_data:
                 self.scrapper.retrieve_local_data()
+                self.loaded_local_data = True
 
             self.scrapper.start()
         elif key == 'roi':

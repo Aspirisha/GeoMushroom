@@ -1,18 +1,8 @@
-var interest_polygon = [
-          {lat: 59.157162, lng: 28.066060},
-          {lat: 60.571626, lng: 28.066060},
-          {lat: 60.571626, lng: 31.536363},
-          {lat: 59.157162, lng: 31.536363},
-          {lat: 59.157162, lng: 28.066060}];
-var heatmap_points = null;
-var markers = [];
-var markersVisibility = true;
-
-function getInterestRegionStr(bermudaTriangle) {
-    var len = bermudaTriangle.getPath().getLength();
+function getInterestRegionStr(searchPolygon) {
+    var len = searchPolygon.getPath().getLength();
     var htmlStr = "";
     for (var i = 0; i < len; i++) {
-        htmlStr += bermudaTriangle.getPath().getAt(i).toUrlValue(5) + ";";
+        htmlStr += searchPolygon.getPath().getAt(i).toUrlValue(5) + ";";
     }
     return htmlStr;
 }
@@ -44,8 +34,7 @@ function addButtonBase(controlDiv, title, text) {
     return [controlUI, controlText];
 }
 
-function StartControl(controlDiv, bermudaTriangle, socket) {
-    // Set CSS for the control border.
+function startControl(controlDiv, searchPolygon, socket) {
     var res = addButtonBase(controlDiv, 'Start or pause scrapping', 'Start');
     var controlUI = res[0];
     var controlText = res[1];
@@ -55,7 +44,7 @@ function StartControl(controlDiv, bermudaTriangle, socket) {
         if (controlText.innerHTML == "Start") {
             controlText.innerHTML = "Pause";
             command = 'Start ';
-            command += getInterestRegionStr(bermudaTriangle) + "\n";
+            command += getInterestRegionStr(searchPolygon) + "\n";
 
         } else {
             controlText.innerHTML = "Start";
@@ -67,12 +56,11 @@ function StartControl(controlDiv, bermudaTriangle, socket) {
 
 }
 
-function HideMarkers(controlDiv) {
+function hideMarkers(controlDiv, markers, markersVisibility) {
     var res = addButtonBase(controlDiv, 'Click to hide or show markers', 'Hide Markers');
     var controlUI = res[0];
     var controlText = res[1];
 
-    // Setup the click event listeners: simply set the map to Chicago.
     controlUI.addEventListener('click', function() {
         if (controlText.innerHTML == "Show Markers") {
             controlText.innerHTML = "Hide Markers";
@@ -88,7 +76,7 @@ function HideMarkers(controlDiv) {
     });
 }
 
-function HideROI(controlDiv, polygon) {
+function hideROI(controlDiv, polygon) {
     var res = addButtonBase(controlDiv, 'Click to hide or show ROI', 'Hide ROI');
     var controlUI = res[0];
     var controlText = res[1];
@@ -109,13 +97,16 @@ function HideROI(controlDiv, polygon) {
 
 function initialize() {
     // create websocket
-    if (! ("WebSocket" in window)) WebSocket = MozWebSocket; // firefox
+    if (!("WebSocket" in window)) {
+        WebSocket = MozWebSocket; // firefox
+    }
 
     var socket = new WebSocket("ws://localhost:8076");
+    var heatmap_points = new google.maps.MVCArray;
+    var markers = [];
+    var markersVisibility = true;
 
-    // open the socket
     socket.onopen = function(event) {
-        // show server response
         socket.onmessage = function(e) {
             params = e.data.split(' ');
             if (params[0] == "LATLONS") {
@@ -160,8 +151,15 @@ function initialize() {
 	map = new google.maps.Map(document.getElementById("map_canvas"), myOptions);
 
      // Construct the polygon.
-    var bermudaTriangle = new google.maps.Polygon({
-      paths: interest_polygon,
+     var default_interest_polygon = [
+          {lat: 59.157162, lng: 28.066060},
+          {lat: 60.571626, lng: 28.066060},
+          {lat: 60.571626, lng: 31.536363},
+          {lat: 59.157162, lng: 31.536363},
+          {lat: 59.157162, lng: 28.066060}];
+
+    var searchPolygon = new google.maps.Polygon({
+      paths: default_interest_polygon,
       strokeColor: '#FF0000',
       strokeOpacity: 0.8,
       strokeWeight: 2,
@@ -171,9 +169,8 @@ function initialize() {
       geodesic: true,
       editable: true
     });
-    bermudaTriangle.setMap(map);
+    searchPolygon.setMap(map);
 
-	heatmap_points = new google.maps.MVCArray;
 	var heatmap = new google.maps.visualization.HeatmapLayer({
 		data: heatmap_points
 	});
@@ -184,18 +181,11 @@ function initialize() {
   	heatmap.set('opacity', 0.600000);
   	heatmap.set('dissipating', true);
 
-	function placeMarkerAndPanTo(latLng, map) {
-	  var marker = new google.maps.Marker({
-	    position: latLng,
-	    map: map
-	  });
-	}
-
     var startControlDiv = document.createElement('div');
     startControlDiv.setAttribute('horizontal', '');
     startControlDiv.setAttribute('layout', '');
-    var startControl = new StartControl(startControlDiv, bermudaTriangle, socket);
-    var hideMarkers = new HideMarkers(startControlDiv, socket);
-    var hideROI = new HideROI(startControlDiv, bermudaTriangle);
+    startControl(startControlDiv, searchPolygon, socket);
+    hideMarkers(startControlDiv, markers, markersVisibility);
+    hideROI(startControlDiv, searchPolygon);
     map.controls[google.maps.ControlPosition.TOP_RIGHT].push(startControlDiv);
 }

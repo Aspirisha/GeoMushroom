@@ -64,7 +64,7 @@ class VkScrapper:
                     lat, lon, url = l.split(' ')
                     point = transform(project, Point(float(lon), float(lat)))
                     if not self.roi.contains(point):
-                        return
+                        continue
                     self.on_found_latlon(lat, lon, url)
                 except:
                     pass
