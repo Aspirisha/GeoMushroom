@@ -34,24 +34,23 @@ function addButtonBase(controlDiv, title, text) {
     return [controlUI, controlText];
 }
 
-function startControl(controlDiv, searchPolygon, socket) {
-    var res = addButtonBase(controlDiv, 'Start or pause scrapping', 'Start');
+function updateControl(controlDiv, searchPolygon, socket, heatmap_points, markers, map) {
+    var res = addButtonBase(controlDiv, 'Update map with new ROI', 'Update');
     var controlUI = res[0];
     var controlText = res[1];
 
     controlUI.addEventListener('click', function() {
-        var command = "";
-        if (controlText.innerHTML == "Start") {
-            controlText.innerHTML = "Pause";
-            command = 'Start ';
-            command += getInterestRegionStr(searchPolygon) + "\n";
-
-        } else {
-            controlText.innerHTML = "Start";
-            command = 'Pause\n';
+        try {
+        var command = 'Update ' + getInterestRegionStr(searchPolygon) + "\n";
+        heatmap_points.clear();
+        if (markers) {
+            for (var i in markers) {
+                markers[i].setMap(null);
+            }
         }
-
+        markers.length = 0;
         socket.send(command);
+    } catch (err) {alert(err);}
   });
 
 }
@@ -184,7 +183,7 @@ function initialize() {
     var startControlDiv = document.createElement('div');
     startControlDiv.setAttribute('horizontal', '');
     startControlDiv.setAttribute('layout', '');
-    startControl(startControlDiv, searchPolygon, socket);
+    updateControl(startControlDiv, searchPolygon, socket, heatmap_points, markers, map);
     hideMarkers(startControlDiv, markers, markersVisibility);
     hideROI(startControlDiv, searchPolygon);
     map.controls[google.maps.ControlPosition.TOP_RIGHT].push(startControlDiv);

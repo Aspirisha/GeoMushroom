@@ -15,32 +15,20 @@ from txws import WebSocketFactory  # pip install txws
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(dir_path)
-from scrapper import VkScrapper
+from scrapper import LocalDataSupplier
 
 
 class Protocol(protocol.Protocol):
 
     def connectionMade(self):
         log.msg("launch a new process on each new connection")
-        with open('tokens.txt') as f:
-            tokens = [l.strip() for l in f]
 
-        if len(tokens) == 0:
-            print("No tokens found!")
-            exit(0)
-
-        session = vk.Session(access_token=tokens[0])
-        vkapi = vk.API(session)
-
-        self.scrapper = VkScrapper(vkapi, self.__on_found_latlon)
-        self.scrapper_thread = Thread(target=self.scrapper.get_locations_by_groups)
-        self.scrapper_thread.start()
-        self.started = True
-        self.loaded_local_data = False
+        self.data_supplier = LocalDataSupplier(self.__on_found_latlon)
 
     def dataReceived(self, data):
         try:
             msg = data.decode('utf-8')
+            print("Got message ", msg)
             log.msg("Received data: " + msg)
             self.__process_input(msg)
         except Exception as e:
@@ -48,10 +36,8 @@ class Protocol(protocol.Protocol):
             print("exception parsing %r" % data)
 
     def connectionLost(self, reason):
+        print("Lost connection")
         self.transport.loseConnection()
-        self.scrapper.stop()
-        self.scrapper_thread.join()
-        self.scrapper.close()
 
     def _send(self, data):
         self.transport.write(data) # send back
@@ -60,7 +46,7 @@ class Protocol(protocol.Protocol):
         line = msg.strip()
         commands = line.split(' ')
         key = commands[0].lower().strip()
-        if key == 'start':
+        if key == 'update':
             print('starting...')
             coords = []
             try:
@@ -69,22 +55,14 @@ class Protocol(protocol.Protocol):
                     coords.append((float(lon), float(lat)))
             except Exception as e:
                 pass
-            self.scrapper.set_roi(coords)
+            self.data_supplier.set_roi(coords)
 
-            if not self.loaded_local_data:
-                self.scrapper.retrieve_local_data()
-                self.loaded_local_data = True
+            self.data_supplier.retrieve_local_data()
 
-            self.scrapper.start()
+            #self.scrapper.start()
         elif key == 'roi':
             print(line)
             #self.scrapper.set_roi()
-        elif key == 'pause':
-            print('pausing...')
-            self.scrapper.pause()
-        elif key == 'stop':
-            print('stopping...')
-            self.scrapper.stop()
 
     def __on_found_latlon(self, lat, lon, url):
         self._send("LATLONS {} {} {}".format(lat, lon, url))

@@ -8,6 +8,7 @@ from urllib import request
 import pyproj
 from shapely.geometry import Polygon, Point
 from shapely.ops import transform
+import vk
 from vk.exceptions import VkAPIError
 
 import classify_image
@@ -21,16 +22,41 @@ project = partial(
     pyproj.Proj(init='epsg:4326'),
     pyproj.Proj('+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +no_defs'))
 
+class LocalDataSupplier:
+    def __init__(self, on_found_latlon):
+        self.on_found_latlon = on_found_latlon
+        make_sure_path_exists(OUTPUT_DIR)
+        self.latlonsfile = join(OUTPUT_DIR, "latlons.txt")
+
+
+    def set_roi(self, roi):
+        print("new roi = " + str(roi))
+        self.roi = transform(project, Polygon(roi))
+        print(self.roi)
+
+    def retrieve_local_data(self):
+        with open(self.latlonsfile, "r") as f:
+            for l in f:
+                try:
+                    lat, lon, url = l.split(' ')
+                    point = transform(project, Point(float(lon), float(lat)))
+                    if not self.roi.contains(point):
+                        continue
+                    self.on_found_latlon(lat, lon, url)
+                except:
+                    pass
+
+
 class VkScrapper:
     def __init__(self, vkapi, on_found_latlon):
         self.vkapi = vkapi
         self.keywords = {'mushroom', 'bolete', 'fungus'}
         self.group_keywords = {'грибы', 'грибники', 'грибочки'}
-        self.running = False
-        self.stopped = False
+        self.user_albums_keywords = {'грибы', 'грибники', 'грибочки', 'дача', 'лес', 'тихая охота', 'mushrooms'}
         #currently unused
         self.city_by_id = {}
         self.countries = {}
+        self.roi = None
         self.processed_file = join(CACHE_DIR, "processed.txt")
         make_sure_path_exists(TEMP_DIR)
         make_sure_path_exists(CACHE_DIR)
@@ -57,25 +83,20 @@ class VkScrapper:
         self.roi = transform(project, Polygon(roi))
         print(self.roi)
 
-    def retrieve_local_data(self):
-        with open(self.latlonsfile, "r") as f:
-            for l in f:
-                try:
-                    lat, lon, url = l.split(' ')
-                    point = transform(project, Point(float(lon), float(lat)))
-                    if not self.roi.contains(point):
-                        continue
-                    self.on_found_latlon(lat, lon, url)
-                except:
-                    pass
-
     def get_locations_by_user_or_group(self, owner):
         albums = self._api_call(self.vkapi.photos.getAlbums, owner_id=owner)
         if not albums:
             return
 
 
+
         for album in albums:
+            if owner > 0: # is owner is normal user, don't process album unless it contains keyword
+                for kw in self.user_albums_keywords:
+                    if kw in album['title']:
+                        break
+                else:
+                    continue
             photos = self._api_call(self.vkapi.photos.get, owner_id=owner, album_id=album['aid'], extended=True)
             if not photos:
                 continue
@@ -86,11 +107,6 @@ class VkScrapper:
                 print("error printing album title")
 
             for p in photos:
-                while not self.running:
-                    if self.stopped:
-                        return
-                    sleep(1)
-
                 self.__process_photo(p)
             time.sleep(TIME_TO_SLEEP)
 
@@ -100,7 +116,7 @@ class VkScrapper:
 
         lat, lon = p['lat'], p['long']
         point = transform(project, Point(lon, lat))
-        if not self.roi.contains(point):
+        if (self.roi is not None) and (not self.roi.contains(point)):
             return
 
         src_variants = ['src_xbig', 'src_big', 'src_xxxbig', 'src']
@@ -128,7 +144,15 @@ class VkScrapper:
                     p[src_var], p['lat'],
                     p['long']))
 
+    def get_all_locations(self):
+        self.get_locations_by_groups()
+        #self.get_locations_by_groups_members()
+
+
     def get_locations_by_groups(self):
+        self._process_groups(lambda group: self.get_locations_by_user_or_group(-group.get('gid')))
+
+    def _process_groups(self, group_processor):
         groups_count_per_kw = 1000
         for kw in self.group_keywords:
             groups = self._api_call(self.vkapi.groups.search, q=kw, count=groups_count_per_kw, lang='ru')
@@ -140,9 +164,28 @@ class VkScrapper:
                     print("scanning group {} (id {})".format(group.get('name'), group.get('gid')))
                 except UnicodeEncodeError as e:
                     print("error printing group title")
-                self.get_locations_by_user_or_group(-group.get('gid'))
-                if self.stopped:
-                    return
+
+                try:
+                    group_processor(group)
+                except Exception as e:
+                    pass
+
+    def get_locations_by_groups_members(self):
+        self._process_groups(lambda group: self.get_locations_by_users_in_group(group.get('gid')))
+
+    def get_locations_by_users_in_group(self, gid):
+        members_per_request = 1000
+        offset = 0
+
+        result = self._api_call(self.vkapi.groups.getMembers, group_id=gid, offset=offset, count=members_per_request)
+        while result['count'] > offset:
+            result = self._api_call(self.vkapi.groups.getMembers, group_id=gid, offset=offset, count=members_per_request)
+            offset += members_per_request
+
+            for owner in result['users']:
+                self.get_locations_by_user_or_group(owner)
+            print("Processed {} users".format(len(result['users'])))
+
 
     def classify_photo(self, url):
         h = hashlib.md5(str.encode(url)).hexdigest()
@@ -150,9 +193,8 @@ class VkScrapper:
             return None
 
         image_path = join(TEMP_DIR, 'img.jpg')
-        f = open(image_path, 'wb')
-        f.write(request.urlopen(url).read())
-        f.close()
+        with open(image_path, 'wb') as f:
+            f.write(request.urlopen(url).read())
 
         with open(self.processed_file, "a") as f:
             f.write("{}\n".format(h))
@@ -176,13 +218,20 @@ class VkScrapper:
                     return None
         return None
 
-    def start(self):
-        self.running = True
 
-    def pause(self):
-        self.running = False
+if __name__ == "__main__":
+    with open('tokens.txt') as f:
+        tokens = [l.strip() for l in f]
 
-    def stop(self):
-        self.running = False
-        self.stopped = True
+    if len(tokens) == 0:
+        print("No tokens found!")
+        exit(0)
 
+    session = vk.Session(access_token=tokens[0])
+    vkapi = vk.API(session)
+
+    def on_found_latlon(self, lat, lon, url):
+        print("Found mushrooms!")
+
+    scrapper = VkScrapper(vkapi, on_found_latlon)
+    scrapper.get_all_locations()
