@@ -1,50 +1,19 @@
 import hashlib
 import time
-from functools import partial
-from os.path import join
-from time import sleep
+from os.path import join, exists
 from urllib import request
 
-import pyproj
+import vk
 from shapely.geometry import Polygon, Point
 from shapely.ops import transform
-import vk
 from vk.exceptions import VkAPIError
 
 import classify_image
-from common import *
+from common import make_sure_path_exists, OUTPUT_DIR, project
 
 TIME_TO_SLEEP = 0.35
 TEMP_DIR = ".tmp"
 CACHE_DIR = ".cache"
-project = partial(
-    pyproj.transform,
-    pyproj.Proj(init='epsg:4326'),
-    pyproj.Proj('+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +no_defs'))
-
-class LocalDataSupplier:
-    def __init__(self, on_found_latlon):
-        self.on_found_latlon = on_found_latlon
-        make_sure_path_exists(OUTPUT_DIR)
-        self.latlonsfile = join(OUTPUT_DIR, "latlons.txt")
-
-
-    def set_roi(self, roi):
-        print("new roi = " + str(roi))
-        self.roi = transform(project, Polygon(roi))
-        print(self.roi)
-
-    def retrieve_local_data(self):
-        with open(self.latlonsfile, "r") as f:
-            for l in f:
-                try:
-                    lat, lon, url = l.split(' ')
-                    point = transform(project, Point(float(lon), float(lat)))
-                    if not self.roi.contains(point):
-                        continue
-                    self.on_found_latlon(lat, lon, url)
-                except:
-                    pass
 
 
 class VkScrapper:
@@ -65,7 +34,7 @@ class VkScrapper:
         self.on_found_latlon = on_found_latlon
         self.tagger = classify_image.ImageTagger('.models')
 
-        if os.path.exists(self.processed_file):
+        if exists(self.processed_file):
             with open(self.processed_file, "r") as f:
                 self.processed = set([s.strip() for s in f])
         else:

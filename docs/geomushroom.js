@@ -100,7 +100,10 @@ function initialize() {
         WebSocket = MozWebSocket; // firefox
     }
 
-    var socket = new WebSocket("ws://localhost:8076");
+    var ip = "47.254.135.24"; 
+    //var ip = "localhost";
+
+    var socket = new WebSocket("ws://" + ip + ":8076");
     var heatmap_points = new google.maps.MVCArray;
     var markers = [];
     var markersVisibility = true;
