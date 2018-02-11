@@ -22,15 +22,11 @@ class VkScrapper:
         self.keywords = {'mushroom', 'bolete', 'fungus'}
         self.group_keywords = {'грибы', 'грибники', 'грибочки'}
         self.user_albums_keywords = {'грибы', 'грибники', 'грибочки', 'дача', 'лес', 'тихая охота', 'mushrooms'}
-        #currently unused
-        self.city_by_id = {}
-        self.countries = {}
-        self.roi = None
         self.processed_file = join(CACHE_DIR, "processed.txt")
         make_sure_path_exists(TEMP_DIR)
         make_sure_path_exists(CACHE_DIR)
+        make_sure_path_exists(OUTPUT_DIR)
         self.latlonsfile = join(OUTPUT_DIR, "latlons.txt")
-        countries = self._api_call(self.vkapi.database.getCountries, need_all=1)
         self.on_found_latlon = on_found_latlon
         self.tagger = classify_image.ImageTagger('.models')
 
@@ -40,32 +36,12 @@ class VkScrapper:
         else:
             self.processed = set()
 
-        if not countries:
-            print("Couldn't retrieve countries")
-            return
-        for c in countries:
-            self.countries[c['cid']] = c['title']
-        make_sure_path_exists(OUTPUT_DIR)
-
-    def set_roi(self, roi):
-        print("new roi = " + str(roi))
-        self.roi = transform(project, Polygon(roi))
-        print(self.roi)
-
-    def get_locations_by_user_or_group(self, owner):
+    def get_locations_by_user_or_group(self, owner, photo_processor):
         albums = self._api_call(self.vkapi.photos.getAlbums, owner_id=owner)
         if not albums:
             return
 
-
-
         for album in albums:
-            if owner > 0: # is owner is normal user, don't process album unless it contains keyword
-                for kw in self.user_albums_keywords:
-                    if kw in album['title']:
-                        break
-                else:
-                    continue
             photos = self._api_call(self.vkapi.photos.get, owner_id=owner, album_id=album['aid'], extended=True)
             if not photos:
                 continue
@@ -76,8 +52,17 @@ class VkScrapper:
                 print("error printing album title")
 
             for p in photos:
-                self.__process_photo(p)
+                photo_processor(p)
             time.sleep(TIME_TO_SLEEP)
+
+    def __process_group_photo(self, p):
+        try:
+            self.__process_photo(p)
+            if p['user_id'] > 0:  # user uploaded this photo, probably she has many mushroom photos
+                print("processing user ", p['user_id'])
+                self.get_locations_by_user_or_group(p['user_id'], self.__process_photo)
+        except Exception as e:
+            print(e)
 
     def __process_photo(self, p):
         if not ('long' in p and 'lat' in p):
@@ -115,11 +100,11 @@ class VkScrapper:
 
     def get_all_locations(self):
         self.get_locations_by_groups()
-        #self.get_locations_by_groups_members()
-
+        # self.get_locations_by_groups_members()
 
     def get_locations_by_groups(self):
-        self._process_groups(lambda group: self.get_locations_by_user_or_group(-group.get('gid')))
+        self._process_groups(lambda group: self.get_locations_by_user_or_group(
+            -group.get('gid'), self.__process_group_photo))
 
     def _process_groups(self, group_processor):
         groups_count_per_kw = 1000
@@ -148,13 +133,13 @@ class VkScrapper:
 
         result = self._api_call(self.vkapi.groups.getMembers, group_id=gid, offset=offset, count=members_per_request)
         while result['count'] > offset:
-            result = self._api_call(self.vkapi.groups.getMembers, group_id=gid, offset=offset, count=members_per_request)
+            result = self._api_call(self.vkapi.groups.getMembers, group_id=gid, offset=offset,
+                                    count=members_per_request, fields=["photo_max"])
             offset += members_per_request
 
             for owner in result['users']:
-                self.get_locations_by_user_or_group(owner)
+                self.get_locations_by_user_or_group(owner["id"], self.__process_photo)
             print("Processed {} users".format(len(result['users'])))
-
 
     def classify_photo(self, url):
         h = hashlib.md5(str.encode(url)).hexdigest()
@@ -199,8 +184,10 @@ if __name__ == "__main__":
     session = vk.Session(access_token=tokens[0])
     vkapi = vk.API(session)
 
+
     def on_found_latlon(self, lat, lon, url):
         print("Found mushrooms!")
+
 
     scrapper = VkScrapper(vkapi, on_found_latlon)
     scrapper.get_all_locations()
