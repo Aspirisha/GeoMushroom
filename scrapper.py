@@ -30,6 +30,7 @@ class VkScrapper:
         self.on_found_latlon = on_found_latlon
         self.tagger = classify_image.ImageTagger('.models')
 
+        self.processed_users = set()
         if exists(self.processed_file):
             with open(self.processed_file, "r") as f:
                 self.processed = set([s.strip() for s in f])
@@ -58,7 +59,8 @@ class VkScrapper:
     def __process_group_photo(self, p):
         try:
             self.__process_photo(p)
-            if p['user_id'] > 0:  # user uploaded this photo, probably she has many mushroom photos
+            if p['user_id'] > 0 and p['user_id'] not in self.processed_users:  # user uploaded this photo, probably she has many mushroom photos
+                self.processed_users.add(p['user_id'])
                 print("processing user ", p['user_id'])
                 self.get_locations_by_user_or_group(p['user_id'], self.__process_photo)
         except Exception as e:
