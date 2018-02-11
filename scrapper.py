@@ -4,12 +4,10 @@ from os.path import join, exists
 from urllib import request
 
 import vk
-from shapely.geometry import Polygon, Point
-from shapely.ops import transform
 from vk.exceptions import VkAPIError
 
 import classify_image
-from common import make_sure_path_exists, OUTPUT_DIR, project
+from common import make_sure_path_exists, OUTPUT_DIR
 
 TIME_TO_SLEEP = 0.35
 TEMP_DIR = ".tmp"
@@ -17,7 +15,7 @@ CACHE_DIR = ".cache"
 
 
 class VkScrapper:
-    def __init__(self, vkapi, on_found_latlon):
+    def __init__(self, vkapi):
         self.vkapi = vkapi
         self.keywords = {'mushroom', 'bolete', 'fungus'}
         self.group_keywords = {'грибы', 'грибники', 'грибочки'}
@@ -27,7 +25,6 @@ class VkScrapper:
         make_sure_path_exists(CACHE_DIR)
         make_sure_path_exists(OUTPUT_DIR)
         self.latlonsfile = join(OUTPUT_DIR, "latlons.txt")
-        self.on_found_latlon = on_found_latlon
         self.tagger = classify_image.ImageTagger('.models')
 
         self.processed_users = set()
@@ -70,11 +67,6 @@ class VkScrapper:
         if not ('long' in p and 'lat' in p):
             return
 
-        lat, lon = p['lat'], p['long']
-        point = transform(project, Point(lon, lat))
-        if (self.roi is not None) and (not self.roi.contains(point)):
-            return
-
         src_variants = ['src_xbig', 'src_big', 'src_xxxbig', 'src']
         for src_var in src_variants:
             if src_var in p:
@@ -88,12 +80,11 @@ class VkScrapper:
 
         if not self.keywords.isdisjoint(tags):
             print("photo with address {} seems to contain mushrooms and has geotag:"
-                  " lat = {}, lon = {}".format(p[src_var], lat, lon))
+                  " lat = {}, lon = {}".format(p[src_var], p['lat'], p['long']))
 
-            res = "{} {} {}\n".format(lat, lon, p[src_var])
+            res = "{} {} {}\n".format(p['lat'], p['long'], p[src_var])
             with open(self.latlonsfile, "a") as f:
                 f.write(res)
-            self.on_found_latlon(lat, lon, p[src_var])
         else:
             print(
                 "photo with address {} has no mushrooms and has geotag: lat = {}, lon = {}".format(
@@ -124,7 +115,7 @@ class VkScrapper:
                 try:
                     group_processor(group)
                 except Exception as e:
-                    pass
+                    print("Got error: ", e)
 
     def get_locations_by_groups_members(self):
         self._process_groups(lambda group: self.get_locations_by_users_in_group(group.get('gid')))
@@ -187,9 +178,5 @@ if __name__ == "__main__":
     vkapi = vk.API(session)
 
 
-    def on_found_latlon(self, lat, lon, url):
-        print("Found mushrooms!")
-
-
-    scrapper = VkScrapper(vkapi, on_found_latlon)
+    scrapper = VkScrapper(vkapi)
     scrapper.get_all_locations()
