@@ -1,0 +1,6 @@
+{
+    "vk_token": "",
+    "firebase_login": "",
+    "firebase_password": "",
+    "service_account_json" : ""
+}

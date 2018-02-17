@@ -34,23 +34,48 @@ function addButtonBase(controlDiv, title, text) {
     return [controlUI, controlText];
 }
 
-function updateControl(controlDiv, searchPolygon, socket, heatmap_points, markers, map) {
+function updateControl(controlDiv, db, searchPolygon, heatmap_points, markers, map, markersVisibility) {
     var res = addButtonBase(controlDiv, 'Update map with new ROI', 'Update');
     var controlUI = res[0];
     var controlText = res[1];
 
     controlUI.addEventListener('click', function() {
-        try {
-        var command = 'Update ' + getInterestRegionStr(searchPolygon) + "\n";
+        db.ref('mushrooms').once('value', function(mushrooms) {
         heatmap_points.clear();
         if (markers) {
-            for (var i in markers) {
-                markers[i].setMap(null);
+             for (var i in markers) {
+                 markers[i].setMap(null);
             }
         }
-        markers.length = 0;
-        socket.send(command);
-    } catch (err) {alert(err);}
+        for (var property in mushrooms.val()) {
+            if (mushrooms.val().hasOwnProperty(property)) {
+                data = mushrooms.val()[property]
+
+                latlon = new google.maps.LatLng(data.lat, data.lon)
+                var contains = google.maps.geometry.poly.containsLocation(latlon, searchPolygon)
+                if (contains) {
+                    heatmap_points.push(latlon)
+
+                    var contentString = `<img src="${data.url}" alt="Mountain View">`;
+
+                    var infowindow = new google.maps.InfoWindow({
+                      content: contentString
+                    });
+
+                    var marker = new google.maps.Marker({
+                      position: latlon,
+                      map: map,
+                      visible: markersVisibility.valueOf(),
+                      title: 'Mushroom'
+                    });
+                    marker.addListener('click', function() {
+                      infowindow.open(map, marker);
+                    });
+                    markers.push(marker);
+                }
+            }
+        }
+    });
   });
 
 }
@@ -67,12 +92,16 @@ function hideMarkers(controlDiv, markers, markersVisibility) {
             controlText.innerHTML = "Show Markers";
         }
 
-        markersVisibility = !markersVisibility;
+        modifyVar(markersVisibility, !markersVisibility.valueOf())
         var arrayLength = markers.length;
         for (var i = 0; i < arrayLength; i++) {
-            markers[i].setVisible(markersVisibility);
+            markers[i].setVisible(markersVisibility.valueOf());
         }
     });
+}
+
+function modifyVar(obj, val) {
+  obj.valueOf = obj.toSource = obj.toString = function(){ return val; };
 }
 
 function hideROI(controlDiv, polygon) {
@@ -95,55 +124,12 @@ function hideROI(controlDiv, polygon) {
 
 
 function initialize() {
-    // create websocket
-    if (!("WebSocket" in window)) {
-        WebSocket = MozWebSocket; // firefox
-    }
-
-    var ip = "47.254.135.24"; 
-    //var ip = "localhost";
-
-    var socket = new WebSocket("ws://" + ip + ":8076");
     var heatmap_points = new google.maps.MVCArray;
     var markers = [];
-    var markersVisibility = true;
+    var markersVisibility = new Boolean(true);
 
-    socket.onopen = function(event) {
-        socket.onmessage = function(e) {
-            params = e.data.split(' ');
-            if (params[0] == "LATLONS") {
-                lat = parseFloat(params[1]);
-                lon = parseFloat(params[2]);
-                url = params[3];
-                heatmap_points.push(new google.maps.LatLng(lat, lon))
+    var centerlatlng = new google.maps.LatLng(60.208067, 30.526095);
 
-                var contentString = `<img src="${url}" alt="Mountain View">`;
-
-                var infowindow = new google.maps.InfoWindow({
-                  content: contentString
-                });
-
-                var marker = new google.maps.Marker({
-                  position: new google.maps.LatLng(lat, lon),
-                  map: map,
-                  visible: markersVisibility,
-                  title: 'Mushroom'
-                });
-                marker.addListener('click', function() {
-                  infowindow.open(map, marker);
-                });
-                markers.push(marker);
-            }
-        }
-    }
-
-	try {
-		
-		var centerlatlng = new google.maps.LatLng(60.208067, 30.526095);
-	} catch (err) {
-		alert(err);
-	}
-	
 	var myOptions = {
 		zoom: 16,
 		center: centerlatlng,
@@ -173,6 +159,18 @@ function initialize() {
     });
     searchPolygon.setMap(map);
 
+    var config = {
+        apiKey: "AIzaSyDvLeix43yIMGr6bjkG6ccDeiB-e7qDxHc",
+        authDomain: "geomushroom-186520.firebaseapp.com",
+        databaseURL: "https://geomushroom-186520.firebaseio.com",
+        storageBucket: "geomushroom-186520.appspot.com",
+        serviceAccount: "geomushroom-34720f274ce5.json"
+    };
+    firebase.initializeApp(config);
+
+      // Get a reference to the database service
+    var db = firebase.database();
+
 	var heatmap = new google.maps.visualization.HeatmapLayer({
 		data: heatmap_points
 	});
@@ -186,7 +184,7 @@ function initialize() {
     var startControlDiv = document.createElement('div');
     startControlDiv.setAttribute('horizontal', '');
     startControlDiv.setAttribute('layout', '');
-    updateControl(startControlDiv, searchPolygon, socket, heatmap_points, markers, map);
+    updateControl(startControlDiv, db, searchPolygon, heatmap_points, markers, map, markersVisibility);
     hideMarkers(startControlDiv, markers, markersVisibility);
     hideROI(startControlDiv, searchPolygon);
     map.controls[google.maps.ControlPosition.TOP_RIGHT].push(startControlDiv);

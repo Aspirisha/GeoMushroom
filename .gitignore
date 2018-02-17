@@ -3,5 +3,5 @@
 .models
 .cache
 __pycache__
-tokens.txt
+private.txt
 output

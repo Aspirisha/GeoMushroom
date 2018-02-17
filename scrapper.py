@@ -1,7 +1,10 @@
 import hashlib
+import json
 import time
+from abc import abstractmethod
 from os.path import join, exists
 from urllib import request
+import pyrebase
 
 import vk
 from vk.exceptions import VkAPIError
@@ -14,17 +17,54 @@ TEMP_DIR = ".tmp"
 CACHE_DIR = ".cache"
 
 
+class DataSink:
+    @abstractmethod
+    def on_mushroom(self, lat, lon, url):
+        pass
+
+
+class TextfileSink(DataSink):
+    def __init__(self, filename=join(OUTPUT_DIR, "latlons.txt")):
+        self.filename = filename
+
+    def on_mushroom(self, lat, lon, url):
+        res = "{} {} {}\n".format(lat, lon, url)
+        with open(self.filename, "a") as f:
+            f.write(res)
+
+
+class FirebaseSink(DataSink):
+    def __init__(self, login, password, service_account_json):
+        config = {
+            "apiKey": "AIzaSyDvLeix43yIMGr6bjkG6ccDeiB-e7qDxHc",
+            "authDomain": "geomushroom-186520.firebaseapp.com",
+            "databaseURL": "https://geomushroom-186520.firebaseio.com",
+            "storageBucket": "geomushroom-186520.appspot.com",
+            "serviceAccount": service_account_json
+        }
+        self.firebase = pyrebase.initialize_app(config)
+
+        auth = self.firebase.auth()
+        # authenticate a user
+        self.user = auth.sign_in_with_email_and_password(login, password)
+        self.db = self.firebase.database()
+
+    def on_mushroom(self, lat, lon, url):
+        h = hashlib.md5(str.encode(url)).hexdigest()
+        data = {"lat": lat, "lon": lon, "url": url}
+        self.db.child("mushrooms").child(h).set(data, self.user['idToken'])
+
+
 class VkScrapper:
-    def __init__(self, vkapi):
+    def __init__(self, vkapi, data_sink: DataSink):
         self.vkapi = vkapi
         self.keywords = {'mushroom', 'bolete', 'fungus'}
-        self.group_keywords = {'грибы', 'грибники', 'грибочки'}
+        self.group_keywords = {'грибы', 'грибники', 'грибочки', 'лес', 'грибов'}
         self.user_albums_keywords = {'грибы', 'грибники', 'грибочки', 'дача', 'лес', 'тихая охота', 'mushrooms'}
         self.processed_file = join(CACHE_DIR, "processed.txt")
         make_sure_path_exists(TEMP_DIR)
         make_sure_path_exists(CACHE_DIR)
         make_sure_path_exists(OUTPUT_DIR)
-        self.latlonsfile = join(OUTPUT_DIR, "latlons.txt")
         self.tagger = classify_image.ImageTagger('.models')
 
         self.processed_users = set()
@@ -33,6 +73,8 @@ class VkScrapper:
                 self.processed = set([s.strip() for s in f])
         else:
             self.processed = set()
+
+        self.data_sink = data_sink
 
     def get_locations_by_user_or_group(self, owner, photo_processor):
         albums = self._api_call(self.vkapi.photos.getAlbums, owner_id=owner)
@@ -82,9 +124,7 @@ class VkScrapper:
             print("photo with address {} seems to contain mushrooms and has geotag:"
                   " lat = {}, lon = {}".format(p[src_var], p['lat'], p['long']))
 
-            res = "{} {} {}\n".format(p['lat'], p['long'], p[src_var])
-            with open(self.latlonsfile, "a") as f:
-                f.write(res)
+            self.data_sink.on_mushroom(p['lat'], p['long'], p[src_var])
         else:
             print(
                 "photo with address {} has no mushrooms and has geotag: lat = {}, lon = {}".format(
@@ -100,7 +140,7 @@ class VkScrapper:
             -group.get('gid'), self.__process_group_photo))
 
     def _process_groups(self, group_processor):
-        groups_count_per_kw = 1000
+        groups_count_per_kw = 3000
         for kw in self.group_keywords:
             groups = self._api_call(self.vkapi.groups.search, q=kw, count=groups_count_per_kw, lang='ru')
             if not groups:
@@ -167,16 +207,21 @@ class VkScrapper:
 
 
 if __name__ == "__main__":
-    with open('tokens.txt') as f:
-        tokens = [l.strip() for l in f]
+    private_data = json.load(open("private.txt"))
 
-    if len(tokens) == 0:
+    if "vk_token" not in private_data:
         print("No tokens found!")
         exit(0)
 
-    session = vk.Session(access_token=tokens[0])
+    session = vk.Session(access_token=private_data["vk_token"])
     vkapi = vk.API(session)
 
-
-    scrapper = VkScrapper(vkapi)
-    scrapper.get_all_locations()
+    #sink = TextfileSink()
+    try:
+        sink = FirebaseSink(private_data["firebase_login"],
+                            private_data["firebase_password"], private_data["service_account_json"])
+    except Exception as e:
+        print("Error creating firebase sink. Using plain text.")
+        sink = TextfileSink()
+    scrapper = VkScrapper(vkapi, sink)
+    #scrapper.get_all_locations()
