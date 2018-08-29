@@ -52,11 +52,7 @@ function add_marker(map, markers, markersVisibility, heatmap_points, data) {
     latlon = new google.maps.LatLng(data.lat, data.lon)
     heatmap_points.push(latlon)
 
-    var contentString = `<img src="${data.url}" alt="Mountain View">`;
-
-    var infowindow = new google.maps.InfoWindow({
-      content: contentString
-    });
+    var infowindow = new google.maps.InfoWindow();
 
     var marker = new google.maps.Marker({
       position: latlon,
@@ -64,7 +60,9 @@ function add_marker(map, markers, markersVisibility, heatmap_points, data) {
       visible: markersVisibility.valueOf(),
       title: 'Mushroom'
     });
+
     marker.addListener('click', function() {
+      infowindow.setContent('<img src=' + data.url + '>');
       infowindow.open(map, marker);
       console.log(marker.position.lat(), marker.position.lng(), data.url);
     });
@@ -104,6 +102,7 @@ function initialize() {
                  markers[i].setMap(null);
             }
         }
+
         mushrooms.forEach(function(snap) {
             data = snap.val();
             add_marker(map, markers, markersVisibility, heatmap_points, data);
