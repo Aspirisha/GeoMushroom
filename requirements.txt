@@ -1,0 +1,12 @@
+twisted[tls]
+tensorflow==2.13.0
+tensorflow-metal==1.0.0
+numpy
+pyproj
+shapely
+firebase
+firebase_admin
+vk
+tensorflow-hub
+Pillow
+matplotlib

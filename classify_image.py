@@ -32,106 +32,213 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import logging
 import os.path
 import re
 import sys
 import tarfile
+import shutil
 
 import numpy as np
 from six.moves import urllib
 import tensorflow as tf
+from PIL import Image
+import tensorflow_hub as hub
+import matplotlib.pyplot as plt
+
+from tensorflow.compat.v1.gfile import FastGFile
 
 # pylint: disable=line-too-long
-DATA_URL = 'http://download.tensorflow.org/models/image/imagenet/inception-2015-12-05.tgz'
 
+model_handle_map = {
+  "efficientnetv2-s": "https://tfhub.dev/google/imagenet/efficientnet_v2_imagenet1k_s/classification/2",
+  "efficientnetv2-m": "https://tfhub.dev/google/imagenet/efficientnet_v2_imagenet1k_m/classification/2",
+  "efficientnetv2-l": "https://tfhub.dev/google/imagenet/efficientnet_v2_imagenet1k_l/classification/2",
+  "efficientnetv2-s-21k": "https://tfhub.dev/google/imagenet/efficientnet_v2_imagenet21k_s/classification/2",
+  "efficientnetv2-m-21k": "https://tfhub.dev/google/imagenet/efficientnet_v2_imagenet21k_m/classification/2",
+  "efficientnetv2-l-21k": "https://tfhub.dev/google/imagenet/efficientnet_v2_imagenet21k_l/classification/2",
+  "efficientnetv2-xl-21k": "https://tfhub.dev/google/imagenet/efficientnet_v2_imagenet21k_xl/classification/2",
+  "efficientnetv2-b0-21k": "https://tfhub.dev/google/imagenet/efficientnet_v2_imagenet21k_b0/classification/2",
+  "efficientnetv2-b1-21k": "https://tfhub.dev/google/imagenet/efficientnet_v2_imagenet21k_b1/classification/2",
+  "efficientnetv2-b2-21k": "https://tfhub.dev/google/imagenet/efficientnet_v2_imagenet21k_b2/classification/2",
+  "efficientnetv2-b3-21k": "https://tfhub.dev/google/imagenet/efficientnet_v2_imagenet21k_b3/classification/2",
+  "efficientnetv2-s-21k-ft1k": "https://tfhub.dev/google/imagenet/efficientnet_v2_imagenet21k_ft1k_s/classification/2",
+  "efficientnetv2-m-21k-ft1k": "https://tfhub.dev/google/imagenet/efficientnet_v2_imagenet21k_ft1k_m/classification/2",
+  "efficientnetv2-l-21k-ft1k": "https://tfhub.dev/google/imagenet/efficientnet_v2_imagenet21k_ft1k_l/classification/2",
+  "efficientnetv2-xl-21k-ft1k": "https://tfhub.dev/google/imagenet/efficientnet_v2_imagenet21k_ft1k_xl/classification/2",
+  "efficientnetv2-b0-21k-ft1k": "https://tfhub.dev/google/imagenet/efficientnet_v2_imagenet21k_ft1k_b0/classification/2",
+  "efficientnetv2-b1-21k-ft1k": "https://tfhub.dev/google/imagenet/efficientnet_v2_imagenet21k_ft1k_b1/classification/2",
+  "efficientnetv2-b2-21k-ft1k": "https://tfhub.dev/google/imagenet/efficientnet_v2_imagenet21k_ft1k_b2/classification/2",
+  "efficientnetv2-b3-21k-ft1k": "https://tfhub.dev/google/imagenet/efficientnet_v2_imagenet21k_ft1k_b3/classification/2",
+  "efficientnetv2-b0": "https://tfhub.dev/google/imagenet/efficientnet_v2_imagenet1k_b0/classification/2",
+  "efficientnetv2-b1": "https://tfhub.dev/google/imagenet/efficientnet_v2_imagenet1k_b1/classification/2",
+  "efficientnetv2-b2": "https://tfhub.dev/google/imagenet/efficientnet_v2_imagenet1k_b2/classification/2",
+  "efficientnetv2-b3": "https://tfhub.dev/google/imagenet/efficientnet_v2_imagenet1k_b3/classification/2",
+  "efficientnet_b0": "https://tfhub.dev/tensorflow/efficientnet/b0/classification/1",
+  "efficientnet_b1": "https://tfhub.dev/tensorflow/efficientnet/b1/classification/1",
+  "efficientnet_b2": "https://tfhub.dev/tensorflow/efficientnet/b2/classification/1",
+  "efficientnet_b3": "https://tfhub.dev/tensorflow/efficientnet/b3/classification/1",
+  "efficientnet_b4": "https://tfhub.dev/tensorflow/efficientnet/b4/classification/1",
+  "efficientnet_b5": "https://tfhub.dev/tensorflow/efficientnet/b5/classification/1",
+  "efficientnet_b6": "https://tfhub.dev/tensorflow/efficientnet/b6/classification/1",
+  "efficientnet_b7": "https://tfhub.dev/tensorflow/efficientnet/b7/classification/1",
+  "bit_s-r50x1": "https://tfhub.dev/google/bit/s-r50x1/ilsvrc2012_classification/1",
+  "inception_v3": "https://tfhub.dev/google/imagenet/inception_v3/classification/4",
+  "inception_resnet_v2": "https://tfhub.dev/google/imagenet/inception_resnet_v2/classification/4",
+  "resnet_v1_50": "https://tfhub.dev/google/imagenet/resnet_v1_50/classification/4",
+  "resnet_v1_101": "https://tfhub.dev/google/imagenet/resnet_v1_101/classification/4",
+  "resnet_v1_152": "https://tfhub.dev/google/imagenet/resnet_v1_152/classification/4",
+  "resnet_v2_50": "https://tfhub.dev/google/imagenet/resnet_v2_50/classification/4",
+  "resnet_v2_101": "https://tfhub.dev/google/imagenet/resnet_v2_101/classification/4",
+  "resnet_v2_152": "https://tfhub.dev/google/imagenet/resnet_v2_152/classification/4",
+  "nasnet_large": "https://tfhub.dev/google/imagenet/nasnet_large/classification/4",
+  "nasnet_mobile": "https://tfhub.dev/google/imagenet/nasnet_mobile/classification/4",
+  "pnasnet_large": "https://tfhub.dev/google/imagenet/pnasnet_large/classification/4",
+  "mobilenet_v2_100_224": "https://tfhub.dev/google/imagenet/mobilenet_v2_100_224/classification/4",
+  "mobilenet_v2_130_224": "https://tfhub.dev/google/imagenet/mobilenet_v2_130_224/classification/4",
+  "mobilenet_v2_140_224": "https://tfhub.dev/google/imagenet/mobilenet_v2_140_224/classification/4",
+  "mobilenet_v3_small_100_224": "https://tfhub.dev/google/imagenet/mobilenet_v3_small_100_224/classification/5",
+  "mobilenet_v3_small_075_224": "https://tfhub.dev/google/imagenet/mobilenet_v3_small_075_224/classification/5",
+  "mobilenet_v3_large_100_224": "https://tfhub.dev/google/imagenet/mobilenet_v3_large_100_224/classification/5",
+  "mobilenet_v3_large_075_224": "https://tfhub.dev/google/imagenet/mobilenet_v3_large_075_224/classification/5",
+}
+
+model_image_size_map = {
+  "efficientnetv2-s": 384,
+  "efficientnetv2-m": 480,
+  "efficientnetv2-l": 480,
+  "efficientnetv2-b0": 224,
+  "efficientnetv2-b1": 240,
+  "efficientnetv2-b2": 260,
+  "efficientnetv2-b3": 300,
+  "efficientnetv2-s-21k": 384,
+  "efficientnetv2-m-21k": 480,
+  "efficientnetv2-l-21k": 480,
+  "efficientnetv2-xl-21k": 512,
+  "efficientnetv2-b0-21k": 224,
+  "efficientnetv2-b1-21k": 240,
+  "efficientnetv2-b2-21k": 260,
+  "efficientnetv2-b3-21k": 300,
+  "efficientnetv2-s-21k-ft1k": 384,
+  "efficientnetv2-m-21k-ft1k": 480,
+  "efficientnetv2-l-21k-ft1k": 480,
+  "efficientnetv2-xl-21k-ft1k": 512,
+  "efficientnetv2-b0-21k-ft1k": 224,
+  "efficientnetv2-b1-21k-ft1k": 240,
+  "efficientnetv2-b2-21k-ft1k": 260,
+  "efficientnetv2-b3-21k-ft1k": 300, 
+  "efficientnet_b0": 224,
+  "efficientnet_b1": 240,
+  "efficientnet_b2": 260,
+  "efficientnet_b3": 300,
+  "efficientnet_b4": 380,
+  "efficientnet_b5": 456,
+  "efficientnet_b6": 528,
+  "efficientnet_b7": 600,
+  "inception_v3": 299,
+  "inception_resnet_v2": 299,
+  "mobilenet_v2_100_224": 224,
+  "mobilenet_v2_130_224": 224,
+  "mobilenet_v2_140_224": 224,
+  "nasnet_large": 331,
+  "nasnet_mobile": 224,
+  "pnasnet_large": 331,
+  "resnet_v1_50": 224,
+  "resnet_v1_101": 224,
+  "resnet_v1_152": 224,
+  "resnet_v2_50": 224,
+  "resnet_v2_101": 224,
+  "resnet_v2_152": 224,
+  "mobilenet_v3_small_100_224": 224,
+  "mobilenet_v3_small_075_224": 224,
+  "mobilenet_v3_large_100_224": 224,
+  "mobilenet_v3_large_075_224": 224,
+}
+
+logger = logging.getLogger('classifier')
 
 # pylint: enable=line-too-long
 
 
-class NodeLookup(object):
-    """Converts integer node ID's to human readable labels."""
+def load_image_from_url(img_url):
+  """Returns an image with shape [1, height, width, num_channels]."""
+  user_agent = {'User-agent': 'Colab Sample (https://tensorflow.org)'}
+  response = requests.get(img_url, headers=user_agent)
+  image = Image.open(BytesIO(response.content))
 
-    def __init__(self, model_dir,
-                 label_lookup_path=None,
-                 uid_lookup_path=None):
-        if not label_lookup_path:
-            label_lookup_path = os.path.join(
-                model_dir, 'imagenet_2012_challenge_label_map_proto.pbtxt')
-        if not uid_lookup_path:
-            uid_lookup_path = os.path.join(
-                model_dir, 'imagenet_synset_to_human_label_map.txt')
-        self.node_lookup = self.load(label_lookup_path, uid_lookup_path)
+  with open('.tmp/img.jpg', 'rb') as f:
+    f.write(response.content)
+  image = preprocess_image(image)
+  return image
 
-    def load(self, label_lookup_path, uid_lookup_path):
-        """Loads a human readable English name for each softmax node.
 
-        Args:
-          label_lookup_path: string UID to integer node ID.
-          uid_lookup_path: string UID to human-readable string.
+def preprocess_image(image):
+  image = np.array(image)
+  # reshape into shape [batch_size, height, width, num_channels]
+  img_reshaped = tf.reshape(image, [1, image.shape[0], image.shape[1], image.shape[2]])
+  # Use `convert_image_dtype` to convert to floats in the [0,1] range.
+  image = tf.image.convert_image_dtype(img_reshaped, tf.float32)
+  return image
 
-        Returns:
-          dict from integer node ID to human-readable string.
-        """
-        if not tf.gfile.Exists(uid_lookup_path):
-            tf.logging.fatal('File does not exist %s', uid_lookup_path)
-        if not tf.gfile.Exists(label_lookup_path):
-            tf.logging.fatal('File does not exist %s', label_lookup_path)
 
-        # Loads mapping from string UID to human-readable string
-        proto_as_ascii_lines = tf.gfile.GFile(uid_lookup_path).readlines()
-        uid_to_human = {}
-        p = re.compile(r'[n\d]*[ \S,]*')
-        for line in proto_as_ascii_lines:
-            parsed_items = p.findall(line)
-            uid = parsed_items[0]
-            human_string = parsed_items[2]
-            uid_to_human[uid] = human_string
+def load_image(image_url, image_size=256, dynamic_size=False, max_dynamic_size=512):
+  """Loads and preprocesses images."""
+  # Cache image file locally.
 
-        # Loads mapping from string UID to integer node ID.
-        node_id_to_uid = {}
-        proto_as_ascii = tf.gfile.GFile(label_lookup_path).readlines()
-        for line in proto_as_ascii:
-            if line.startswith('  target_class:'):
-                target_class = int(line.split(': ')[1])
-            if line.startswith('  target_class_string:'):
-                target_class_string = line.split(': ')[1]
-                node_id_to_uid[target_class] = target_class_string[1:-2]
+  logger.info('Processing image %s', image_url)
+  if image_url.startswith('https://'):
+    img = load_image_from_url(image_url)
+  else:
+    fd = tf.io.gfile.GFile(image_url, 'rb')
+    img = preprocess_image(Image.open(fd))
+  # Load and convert to float32 numpy array, add batch dimension, and normalize to range [0, 1].
+  img_raw = img
+  if tf.reduce_max(img) > 1.0:
+    img = img / 255.
+  if len(img.shape) == 3:
+    img = tf.stack([img, img, img], axis=-1)
+  if not dynamic_size:
+    img = tf.image.resize_with_pad(img, image_size, image_size)
+  elif img.shape[1] > max_dynamic_size or img.shape[2] > max_dynamic_size:
+    img = tf.image.resize_with_pad(img, max_dynamic_size, max_dynamic_size)
+  return img, img_raw
 
-        # Loads the final mapping of integer node ID to human-readable string
-        node_id_to_name = {}
-        for key, val in node_id_to_uid.items():
-            if val not in uid_to_human:
-                tf.logging.fatal('Failed to locate: %s', val)
-            name = uid_to_human[val]
-            node_id_to_name[key] = name
 
-        return node_id_to_name
-
-    def id_to_string(self, node_id):
-        if node_id not in self.node_lookup:
-            return ''
-        return self.node_lookup[node_id]
+def show_image(image, title=''):
+  image_size = image.shape[1]
+  w = (image_size * 6) // 320
+  plt.figure(figsize=(w, w))
+  plt.imshow(image[0], aspect='equal')
+  plt.axis('off')
+  plt.title(title)
+  plt.show()
 
 
 class ImageTagger:
     def __init__(self, model_dir):
-        self.model_dir = model_dir
-        self.num_top_predictions = 5
+        self.max_dynamic_size = 512
+        model_name = "efficientnetv2-s"
+        model_handle = model_handle_map[model_name]
+        if model_name in model_image_size_map:
+            self.image_size = model_image_size_map[model_name]
+            self.dynamic_size = False
+            print(f"Images will be converted to {self.image_size}x{self.image_size}")
+        else:
+            self.dynamic_size = True
+            self.image_size = None
+            print(f"Images will be capped to a max size of {self.max_dynamic_size}x{self.max_dynamic_size}")
+        labels_file = "https://storage.googleapis.com/download.tensorflow.org/data/ImageNetLabels.txt"
+        #download labels and creates a maps
+        downloaded_file = tf.keras.utils.get_file("labels.txt", origin=labels_file)
 
-        self.maybe_download_and_extract()
-        self.create_graph()
-        config = tf.ConfigProto()
-        config.gpu_options.allow_growth = True
-        self.session = tf.Session(config=config)
+        with open(downloaded_file) as f:
+            labels = f.readlines()
+            self.classes = [l.strip() for l in labels]
+        self.classifier = hub.load(model_handle)
 
-    def create_graph(self):
-        """Creates a graph from saved GraphDef file and returns a saver."""
-        # Creates graph from saved graph_def.pb.
-        with tf.gfile.FastGFile(os.path.join(
-                self.model_dir, 'classify_image_graph_def.pb'), 'rb') as f:
-            graph_def = tf.GraphDef()
-            graph_def.ParseFromString(f.read())
-            _ = tf.import_graph_def(graph_def, name='')
+        input_shape = (1, self.image_size, self.image_size, 3)
+        warmup_input = tf.random.uniform(input_shape, 0, 1.0)
+        warmup_logits = self.classifier(warmup_input).numpy()
 
     def run_inference_on_image(self, image):
         """Runs inference on an image.
@@ -142,38 +249,23 @@ class ImageTagger:
         Returns:
           dict with top K prediction labels as keys and corresponding scores as values
         """
-        if not tf.gfile.Exists(image):
+        if not os.path.exists(image):
             tf.logging.fatal('File does not exist %s', image)
-        image_data = tf.gfile.FastGFile(image, 'rb').read()
+        image_data, original_image = load_image(image, self.image_size, self.dynamic_size, self.max_dynamic_size)
 
-        # Creates graph from saved GraphDef.
+        probabilities = tf.nn.softmax(self.classifier(image_data)).numpy()
+        top_5 = tf.argsort(probabilities, axis=-1, direction="DESCENDING")[0][:5].numpy()
+        np_classes = np.array(self.classes)
+        includes_background_class = probabilities.shape[1] == 1001
 
-        config = tf.ConfigProto()
-        config.gpu_options.allow_growth = True
-
-        # with tf.Session(config=config) as sess:
-        # Some useful tensors:
-        # 'softmax:0': A tensor containing the normalized prediction across
-        #   1000 labels.
-        # 'pool_3:0': A tensor containing the next-to-last layer containing 2048
-        #   float description of the image.
-        # 'DecodeJpeg/contents:0': A tensor containing a string providing JPEG
-        #   encoding of the image.
-        # Runs the softmax tensor by feeding the image_data as input to the graph.
-        softmax_tensor = self.session.graph.get_tensor_by_name('softmax:0')
-        predictions = self.session.run(softmax_tensor,
-                                       {'DecodeJpeg/contents:0': image_data})
-        predictions = np.squeeze(predictions)
-
-        # Creates node ID --> English string lookup.
-        node_lookup = NodeLookup(self.model_dir)
-
-        top_k = predictions.argsort()[-self.num_top_predictions:][::-1]
         result = {}
-        for node_id in top_k:
-            human_string = node_lookup.id_to_string(node_id)
-            score = predictions[node_id]
-            result[human_string] = score
+        for i, item in enumerate(top_5):
+            class_index = item if includes_background_class else item + 1
+            line = f'({i+1}) {class_index:4} - {self.classes[class_index]}: {probabilities[0][top_5][i]}'
+            result[self.classes[class_index]] = probabilities[0][top_5][i]
+            print(line)
+
+        show_image(image_data, '')
         return result
 
     def maybe_download_and_extract(self):
@@ -193,7 +285,11 @@ class ImageTagger:
             print()
             statinfo = os.stat(filepath)
             print('Successfully downloaded', filename, statinfo.st_size, 'bytes.')
+        dir_name = filepath.split('.')[0]
+
         tarfile.open(filepath, 'r:gz').extractall(dest_directory)
 
-    def close(self):
-        self.session.close()
+        target_dir = os.path.join(dest_directory, self._model_name)
+        if not os.path.exists(target_dir):
+            os.makedirs(target_dir)
+        shutil.move(target_dir + '.pb', os.path.join(target_dir, 'saved_model.pb'))
