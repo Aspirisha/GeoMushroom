@@ -1,0 +1,16 @@
+vk_token: ""
+sinks: 
+- firebase:   # sink name
+  type: firebase
+  config:
+    name: firebase
+    firebase_credentials_path: credentials/firebase-credentials.json
+- postgres:   # sink name
+  type: postgres
+  config:
+    name: postgres
+    database: andysilv
+    host: localhost
+    user: andysilv
+    password: ""
+    port: 5432

@@ -1,19 +1,28 @@
+#!/usr/bin/env python
+
 import hashlib
 import json
 import time
 import logging
-from abc import abstractmethod
+import yaml
+import os
+import sys
+
+# temporary solution until proper deployment is done
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+
 from os.path import join, exists
 from urllib import request
-import firebase_admin
-from firebase_admin import credentials
-
+from scrapper.firebase_sink import FirebaseSink
+from scrapper.postgres_sink import PostgresSink
+from scrapper.textfile_sink import TextfileSink
 
 import vk
 from vk.exceptions import VkAPIError
 
-import classify_image
-from common import make_sure_path_exists, OUTPUT_DIR
+from scrapper.classify_image import ImageTagger
+from scrapper.util import make_sure_path_exists
+
 
 TIME_TO_SLEEP = 0.35
 TEMP_DIR = ".tmp"
@@ -23,42 +32,9 @@ VERSION='5.154'
 logger = logging.getLogger('scrapper')
 
 
-class DataSink:
-    @abstractmethod
-    def on_mushroom(self, lat, lon, url):
-        pass
-
-
-class TextfileSink(DataSink):
-    def __init__(self, filename=join(OUTPUT_DIR, "latlons.txt")):
-        self.filename = filename
-
-    def on_mushroom(self, lat, lon, url):
-        res = "{} {} {}\n".format(lat, lon, url)
-        with open(self.filename, "a") as f:
-            f.write(res)
-
-
-class FirebaseSink(DataSink):
-    def __init__(self, login, password, service_account_json):
-        logger.debug('FirebaseSink initialization started')
-        cred = credentials.Certificate("firebase-credentials.json")
-
-        logger.debug('Loaded firebase credentials...')
-        app = firebase_admin.initialize_app(
-            cred, 
-            options={'databaseURL':'https://geomushroom-186520.firebaseio.com'})
-        logger.debug('Created firebase app...')
-
-    def on_mushroom(self, lat, lon, url):
-        logger.debug('Processing mushroom in Firebase sink...')
-        h = hashlib.md5(str.encode(url)).hexdigest()
-        data = {"lat": lat, "lon": lon, "url": url}
-        firebase_admin.db.child("mushrooms").child(h).set(data, self.user['idToken'])
-
 
 class VkScrapper:
-    def __init__(self, vkapi, data_sink: DataSink, access_token):
+    def __init__(self, vkapi, data_sinks, access_token):
         self.vkapi = vkapi
         self.keywords = {'mushroom', 'bolete', 'fungus'}
         self.group_keywords = {'грибы', 'грибники', 'грибочки', 'лес', 'грибов'}
@@ -67,7 +43,6 @@ class VkScrapper:
         self._access_token = access_token
         make_sure_path_exists(TEMP_DIR)
         make_sure_path_exists(CACHE_DIR)
-        make_sure_path_exists(OUTPUT_DIR)
         self.tagger = classify_image.ImageTagger('.models')
 
         self.processed_users = set()
@@ -77,7 +52,7 @@ class VkScrapper:
         else:
             self.processed = set()
 
-        self.data_sink = data_sink
+        self.data_sinks = data_sinks
 
     def get_locations_by_user_or_group(self, owner, photo_processor):
         albums = self._api_call(self.vkapi.photos.getAlbums, owner_id=owner)
@@ -135,7 +110,8 @@ class VkScrapper:
             logger.info("photo with address %s seems to contain mushrooms and has geotag:"
                         " lat = %f, lon = %f", url, p['lat'], p['long'])
 
-            self.data_sink.on_mushroom(p['lat'], p['long'], url)
+            for sink in self.data_sinks:
+                sink.on_mushroom(p['lat'], p['long'], url)
             return True
         else:
             logger.info("photo with address %s has no mushrooms and has geotag: lat = %f, lon = %f",
@@ -219,27 +195,35 @@ class VkScrapper:
         return None
 
 
+def build_sinks(config):
+    SinkClassByName = {
+        'firebase': FirebaseSink,
+        'postgres': PostgresSink,
+        'text': TextfileSink
+    }
+    sinks = [SinkClassByName[sink_cfg['type']](sink_cfg['config'])
+             for sink_cfg in config['sinks']]
+    logger.info(f'Created {len(sinks)} sinks')
+    return sinks
+
+
 if __name__ == "__main__":
-    logging.basicConfig(encoding='utf-8', level=logging.INFO, format='[%(name)s] %(levelname)s:%(message)s')
+    logging.basicConfig(encoding='utf-8', level=logging.INFO, 
+                        format='[%(name)s] %(levelname)s:%(message)s')
 
     logger.setLevel(logging.DEBUG)
 
-    private_data = json.load(open("private.txt"))
+    with open('config.yaml') as f:
+        config = yaml.safe_load(f)
 
-    if "vk_token" not in private_data:
-        print("No tokens found!")
+    if "vk_token" not in config:
+        print("VK token not found!")
         exit(0)
 
     logger.debug('Creating vk api...')
-    vkapi = vk.API(access_token=private_data["vk_token"])
+    vkapi = vk.API(access_token=config["vk_token"])
     logger.debug('vk api created...')
 
-    #sink = TextfileSink()
-    try:
-        sink = FirebaseSink(private_data["firebase_login"],
-                            private_data["firebase_password"], private_data["service_account_json"])
-    except Exception as e:
-        print("Error creating firebase sink. Using plain text.")
-        sink = TextfileSink()
-    scrapper = VkScrapper(vkapi, sink, private_data["vk_token"])
+    sinks = build_sinks(config)
+    scrapper = VkScrapper(vkapi, sinks, config["vk_token"])
     scrapper.get_all_locations()
