@@ -9,7 +9,7 @@ import os
 import sys
 
 # temporary solution until proper deployment is done
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 from os.path import join, exists
 from urllib import request
@@ -43,7 +43,7 @@ class VkScrapper:
         self._access_token = access_token
         make_sure_path_exists(TEMP_DIR)
         make_sure_path_exists(CACHE_DIR)
-        self.tagger = classify_image.ImageTagger('.models', classifier_config)
+        self.tagger = ImageTagger('.models', classifier_config)
 
         self.processed_users = set()
         if exists(self.processed_file):
