@@ -166,6 +166,7 @@ class VkScrapper:
     def classify_photo(self, url):
         h = hashlib.md5(str.encode(url)).hexdigest()
         if h in self.processed:
+            logger.info('Photo already processed')
             return None
 
         image_path = join(TEMP_DIR, 'img.jpg')
@@ -209,7 +210,8 @@ def build_sinks(config):
 
 if __name__ == "__main__":
     logging.basicConfig(encoding='utf-8', level=logging.INFO, 
-                        format='[%(name)s] %(levelname)s:%(message)s')
+                        format='%(asctime)s [%(name)s] %(levelname)s:%(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S',)
 
     logger.setLevel(logging.DEBUG)
 
