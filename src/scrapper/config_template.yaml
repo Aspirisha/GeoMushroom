@@ -1,4 +1,7 @@
 vk_token: ""
+classifier:
+  show_images: false
+  model_name: efficientnetv2-s
 sinks: 
 - firebase:   # sink name
   type: firebase

@@ -214,19 +214,20 @@ def show_image(image, title=''):
   plt.show()
 
 
-class ImageTagger:
-    def __init__(self, model_dir):
+class ImageTagger(object):
+    def __init__(self, model_dir, config):
         self.max_dynamic_size = 512
-        model_name = "efficientnetv2-s"
+        self._show_images = config['show_images']
+        model_name = config['model_name']
         model_handle = model_handle_map[model_name]
         if model_name in model_image_size_map:
             self.image_size = model_image_size_map[model_name]
             self.dynamic_size = False
-            print(f"Images will be converted to {self.image_size}x{self.image_size}")
+            logger.info(f"Images will be converted to {self.image_size}x{self.image_size}")
         else:
             self.dynamic_size = True
             self.image_size = None
-            print(f"Images will be capped to a max size of {self.max_dynamic_size}x{self.max_dynamic_size}")
+            logger.info(f"Images will be capped to a max size of {self.max_dynamic_size}x{self.max_dynamic_size}")
         labels_file = "https://storage.googleapis.com/download.tensorflow.org/data/ImageNetLabels.txt"
         #download labels and creates a maps
         downloaded_file = tf.keras.utils.get_file("labels.txt", origin=labels_file)
@@ -263,33 +264,9 @@ class ImageTagger:
             class_index = item if includes_background_class else item + 1
             line = f'({i+1}) {class_index:4} - {self.classes[class_index]}: {probabilities[0][top_5][i]}'
             result[self.classes[class_index]] = probabilities[0][top_5][i]
-            print(line)
+            logger.info(line)
 
-        show_image(image_data, '')
+        if self._show_images:
+            show_image(image_data, '')
         return result
 
-    def maybe_download_and_extract(self):
-        """Download and extract model tar file."""
-        dest_directory = self.model_dir
-        if not os.path.exists(dest_directory):
-            os.makedirs(dest_directory)
-        filename = DATA_URL.split('/')[-1]
-        filepath = os.path.join(dest_directory, filename)
-        if not os.path.exists(filepath):
-            def _progress(count, block_size, total_size):
-                sys.stdout.write('\r>> Downloading %s %.1f%%' % (
-                    filename, float(count * block_size) / float(total_size) * 100.0))
-                sys.stdout.flush()
-
-            filepath, _ = urllib.request.urlretrieve(DATA_URL, filepath, _progress)
-            print()
-            statinfo = os.stat(filepath)
-            print('Successfully downloaded', filename, statinfo.st_size, 'bytes.')
-        dir_name = filepath.split('.')[0]
-
-        tarfile.open(filepath, 'r:gz').extractall(dest_directory)
-
-        target_dir = os.path.join(dest_directory, self._model_name)
-        if not os.path.exists(target_dir):
-            os.makedirs(target_dir)
-        shutil.move(target_dir + '.pb', os.path.join(target_dir, 'saved_model.pb'))

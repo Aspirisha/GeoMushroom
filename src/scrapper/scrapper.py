@@ -34,7 +34,7 @@ logger = logging.getLogger('scrapper')
 
 
 class VkScrapper:
-    def __init__(self, vkapi, data_sinks, access_token):
+    def __init__(self, vkapi, data_sinks, access_token, classifier_config):
         self.vkapi = vkapi
         self.keywords = {'mushroom', 'bolete', 'fungus'}
         self.group_keywords = {'грибы', 'грибники', 'грибочки', 'лес', 'грибов'}
@@ -43,7 +43,7 @@ class VkScrapper:
         self._access_token = access_token
         make_sure_path_exists(TEMP_DIR)
         make_sure_path_exists(CACHE_DIR)
-        self.tagger = classify_image.ImageTagger('.models')
+        self.tagger = classify_image.ImageTagger('.models', classifier_config)
 
         self.processed_users = set()
         if exists(self.processed_file):
@@ -225,5 +225,5 @@ if __name__ == "__main__":
     logger.debug('vk api created...')
 
     sinks = build_sinks(config)
-    scrapper = VkScrapper(vkapi, sinks, config["vk_token"])
+    scrapper = VkScrapper(vkapi, sinks, config["vk_token"], config['classifier'])
     scrapper.get_all_locations()
