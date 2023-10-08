@@ -3,5 +3,6 @@
 .models
 .cache
 __pycache__
-private.txt
+src/scrapper/config.yaml
+src/scrapper/credentials
 output
