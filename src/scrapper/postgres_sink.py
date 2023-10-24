@@ -20,9 +20,14 @@ class PostgresSink(DataSink):
         self.geolocator = Nominatim(user_agent="geoapiExercises")
 
     def on_mushroom(self, lat, lon, url):
-        location = self.geolocator.reverse(f"{lat},{lon}")
-        address = location.raw['address']
-        country = address['country']
+        try:
+            location = self.geolocator.reverse(f"{lat},{lon}")
+            address = location.raw['address']
+            country = address['country']
+        except Exception as e:
+            self._logger.error(f'Skipping country identififcation: {str(e)}')
+            country = None
+
         try:
             self.cursor.execute(
                 "INSERT INTO Mushrooms (longitude, latitude, country, URL, time, location)"

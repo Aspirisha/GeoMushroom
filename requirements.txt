@@ -13,3 +13,4 @@ matplotlib
 psycopg2-binary
 geopy
 pytest
+redis

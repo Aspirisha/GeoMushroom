@@ -6,6 +6,7 @@ import time
 import logging
 import yaml
 import os
+import traceback
 import sys
 
 # temporary solution until proper deployment is done
@@ -20,6 +21,8 @@ from scrapper.textfile_sink import TextfileSink
 import vk
 from vk.exceptions import VkAPIError
 
+import redis
+
 from scrapper.classify_image import ImageTagger
 from scrapper.util import make_sure_path_exists
 
@@ -32,27 +35,36 @@ VERSION='5.154'
 logger = logging.getLogger('scrapper')
 
 
-
 class VkScrapper:
     def __init__(self, vkapi, data_sinks, access_token, classifier_config):
         self.vkapi = vkapi
         self.keywords = {'mushroom', 'bolete', 'fungus'}
         self.group_keywords = {'грибы', 'грибники', 'грибочки', 'лес', 'грибов'}
         self.user_albums_keywords = {'грибы', 'грибники', 'грибочки', 'дача', 'лес', 'тихая охота', 'mushrooms'}
-        self.processed_file = join(CACHE_DIR, "processed.txt")
+        self._redis = redis.Redis(host='localhost', port=6379, decode_responses=True)
+        self._processed_redis = redis.Redis(host='127.0.0.1', port=6379, db=1, decode_responses=True)
         self._access_token = access_token
         make_sure_path_exists(TEMP_DIR)
         make_sure_path_exists(CACHE_DIR)
         self.tagger = ImageTagger('.models', classifier_config)
 
         self.processed_users = set()
-        if exists(self.processed_file):
-            with open(self.processed_file, "r") as f:
-                self.processed = set([s.strip() for s in f])
-        else:
-            self.processed = set()
 
         self.data_sinks = data_sinks
+
+    def _is_album_processed(self, album):
+        cached_state = self._redis.get(album['id'])
+        if cached_state is None:
+            return False
+        cached_state = json.loads(cached_state)
+        if cached_state['updated'] != album['updated']:
+            return False
+        return True
+
+    def _is_photo_processed(self, url_hash):
+        is_processed = self._processed_redis.get(url_hash)
+        return is_processed is not None
+
 
     def get_locations_by_user_or_group(self, owner, photo_processor):
         albums = self._api_call(self.vkapi.photos.getAlbums, owner_id=owner)
@@ -60,8 +72,17 @@ class VkScrapper:
             return
 
         logger.info('Retrieved %i albums', albums['count'])
+
         for album in albums['items']:
-            photos = self._api_call(self.vkapi.photos.get, owner_id=owner, album_id=album['id'], extended=True)
+            if self._is_album_processed(album):
+                logger.info(f'Album {album["id"]} is already processed')
+                continue
+
+            try:
+                photos = self._api_call(self.vkapi.photos.get, owner_id=owner, album_id=album['id'], extended=True)
+            except Exception as e:
+                print('Got', e)
+                raise
             if not photos:
                 continue
 
@@ -72,6 +93,8 @@ class VkScrapper:
 
             for p in photos['items']:
                 photo_processor(p)
+            logger.info(f'Saving album {album["id"]} state to redis cache')
+            self._redis.set(album['id'], json.dumps(album))
             time.sleep(TIME_TO_SLEEP)
 
     def __process_group_photo(self, p):
@@ -84,8 +107,13 @@ class VkScrapper:
                 self.processed_users.add(p['user_id'])
                 logger.info("processing user %s", p['user_id'])
                 self.get_locations_by_user_or_group(p['user_id'], self.__process_photo)
+        except VkAPIError as e:
+            if e.code == 29:
+                logger.error('Rate limit exceeded')
+                raise
         except Exception as e:
             logger.error(e)
+            traceback.print_exc() 
 
     def __process_photo(self, p):
         if not ('long' in p and 'lat' in p):
@@ -165,7 +193,8 @@ class VkScrapper:
 
     def classify_photo(self, url):
         h = hashlib.md5(str.encode(url)).hexdigest()
-        if h in self.processed:
+
+        if self._is_photo_processed(h):
             logger.info('Photo already processed')
             return None
 
@@ -173,8 +202,7 @@ class VkScrapper:
         with open(image_path, 'wb') as f:
             f.write(request.urlopen(url).read())
 
-        with open(self.processed_file, "a") as f:
-            f.write("{}\n".format(h))
+        self._processed_redis.set(h, 1)
         return self.tagger.run_inference_on_image(image_path)
 
     def close(self):
