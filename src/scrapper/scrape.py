@@ -41,7 +41,7 @@ class VkScrapper:
         self.keywords = {'mushroom', 'bolete', 'fungus'}
         self.group_keywords = {'грибы', 'грибники', 'грибочки', 'лес', 'грибов'}
         self.user_albums_keywords = {'грибы', 'грибники', 'грибочки', 'дача', 'лес', 'тихая охота', 'mushrooms'}
-        self._redis = redis.Redis(host='localhost', port=6379, decode_responses=True)
+        self._processed_albums_redis = redis.Redis(host='localhost', port=6379, decode_responses=True)
         self._processed_redis = redis.Redis(host='127.0.0.1', port=6379, db=1, decode_responses=True)
         self._access_token = access_token
         make_sure_path_exists(TEMP_DIR)
@@ -53,7 +53,7 @@ class VkScrapper:
         self.data_sinks = data_sinks
 
     def _is_album_processed(self, album):
-        cached_state = self._redis.get(album['id'])
+        cached_state = self._processed_albums_redis.get(album['id'])
         if cached_state is None:
             return False
         cached_state = json.loads(cached_state)
@@ -67,7 +67,16 @@ class VkScrapper:
 
 
     def get_locations_by_user_or_group(self, owner, photo_processor):
-        albums = self._api_call(self.vkapi.photos.getAlbums, owner_id=owner)
+        try:
+            albums = self._api_call(self.vkapi.photos.getAlbums, owner_id=owner)
+        except VkAPIError as e:
+            if e.code == 15:
+                logger.info('Group photos are disabled. Skipping the group...')
+                return
+            elif e.code == 18:
+                logger.info('User page was banned or deleted...')
+            raise
+
         if not albums:
             return
 
@@ -94,7 +103,7 @@ class VkScrapper:
             for p in photos['items']:
                 photo_processor(p)
             logger.info(f'Saving album {album["id"]} state to redis cache')
-            self._redis.set(album['id'], json.dumps(album))
+            self._processed_albums_redis.set(album['id'], json.dumps(album))
             time.sleep(TIME_TO_SLEEP)
 
     def __process_group_photo(self, p):
@@ -110,10 +119,11 @@ class VkScrapper:
         except VkAPIError as e:
             if e.code == 29:
                 logger.error('Rate limit exceeded')
-                raise
+            raise
         except Exception as e:
             logger.error(e)
-            traceback.print_exc() 
+            traceback.print_exc()
+            raise
 
     def __process_photo(self, p):
         if not ('long' in p and 'lat' in p):
@@ -147,7 +157,13 @@ class VkScrapper:
         return False
 
     def get_all_locations(self):
-        self.get_locations_by_groups()
+        try:
+            self.get_locations_by_groups()
+        except VkAPIError as e:
+            if e.code == 29:
+                logger.info('Rate limit reached.')
+                return
+            raise
         # self.get_locations_by_groups_members()
 
     def get_locations_by_groups(self):
@@ -169,10 +185,7 @@ class VkScrapper:
                 except UnicodeEncodeError as e:
                     logger.error("error printing group title")
 
-                try:
-                    group_processor(group)
-                except Exception as e:
-                    logger.error("Got error: ", e)
+                group_processor(group)
 
     def get_locations_by_groups_members(self):
         self._process_groups(lambda group: self.get_locations_by_users_in_group(group.get('gid')))
@@ -217,12 +230,10 @@ class VkScrapper:
                 return method(*args, v=VERSION, **kwargs)
             except VkAPIError as e:
                 if e.code == 6:  # just too many requests
+                    logger.info('Too many requests, sleeping...')
                     time.sleep(TIME_TO_SLEEP)
                 else:
-                    print("error {}".format(e.code))
-                    return None
-        return None
-
+                    raise
 
 def build_sinks(config):
     SinkClassByName = {
