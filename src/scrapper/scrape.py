@@ -39,7 +39,7 @@ class VkScrapper:
     def __init__(self, vkapi, data_sinks, access_token, classifier_config):
         self.vkapi = vkapi
         self.keywords = {'mushroom', 'bolete', 'fungus'}
-        self.group_keywords = {'грибы', 'грибники', 'грибочки', 'лес', 'грибов'}
+        self.group_keywords = {'грибы', 'грибники', 'грибочки', 'лес', 'грибов', 'сбор', 'mushrooms', 'гриб', 'грибалка', 'походы'}
         self.user_albums_keywords = {'грибы', 'грибники', 'грибочки', 'дача', 'лес', 'тихая охота', 'mushrooms'}
         self._processed_albums_redis = redis.Redis(host='localhost', port=6379, decode_responses=True)
         self._processed_redis = redis.Redis(host='127.0.0.1', port=6379, db=1, decode_responses=True)
@@ -75,6 +75,10 @@ class VkScrapper:
                 return
             elif e.code == 18:
                 logger.info('User page was banned or deleted...')
+                return
+            elif e.code == 200:
+                logger.info('Access denied :(')
+                return
             raise
 
         if not albums:
