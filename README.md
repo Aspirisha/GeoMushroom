@@ -16,13 +16,17 @@ Backend consists of scrapper, which retrives data from vk and should be run befo
 * Copy file config_template.yaml and paste obtained token under `vk_token` key
 * Prepare data sinks:
   - If you want to store results in firebase, create firebase db.
-  - For postgres sink, to initialize database you can use `initdb.sql` from the root directory
+  - For postgres sink, to initialize database you can use `initdb.sql` from the root directory: `psql -a -f initdb.sql`
+    * Note however, that postgres sink is not yet ready to be used on client side :) 
 * Setup data sinks configuration in previously copied `config.yaml`
 * Perform data retrivement from vk by calling `./scrapper.py`
 
 ### How to use client
-1. If you want to use own server, you need to change ip hardcoded in docs/geomushroom.js to the one belonging to your server. 
-2. Open docs/geomushroom.html. This is the user interface to control scrapper. 
+* To build client js code
+  - Install npm and necessary packages
+  - Run `tsc --outFile ../../docs/geomushroom.js geomushroom.ts` from `src/client` directory
+* If you want to use own server, you need to change ip hardcoded in docs/geomushroom.js to the one belonging to your server. 
+* Open docs/geomushroom.html. This is the user interface to control scrapper. 
 
 P.S. detected mushrooms can be poisonous. Use at your own risk.
 
