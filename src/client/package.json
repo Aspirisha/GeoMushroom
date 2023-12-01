@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "firebase": "^10.6.0",
+    "tsc": "^2.0.4"
+  },
+  "devDependencies": {
+    "@types/google.maps": "^3.54.9"
+  }
+}

@@ -1,53 +1,3 @@
-
-function addButtonBase(controlDiv, title, text) {
-    var controlUI = document.createElement('div');
-    controlUI.style.backgroundColor = '#fff';
-    controlUI.style.border = '2px solid #fff';
-    controlUI.style.borderRadius = '3px';
-    controlUI.style.boxShadow = '0 2px 6px rgba(0,0,0,.3)';
-    controlUI.style.cursor = 'pointer';
-    controlUI.style.marginBottom = '22px';
-    controlUI.style.textAlign = 'center';
-    controlUI.title = title; //'Click to hide markers';
-    controlDiv.appendChild(controlUI);
-
-    // Set CSS for the control interior.
-    var controlText = document.createElement('div');
-    controlText.style.color = 'rgb(25,25,25)';
-    controlText.style.fontFamily = 'Roboto,Arial,sans-serif';
-    controlText.style.fontSize = '16px';
-    controlText.style.lineHeight = '38px';
-    controlText.style.paddingLeft = '5px';
-    controlText.style.paddingRight = '5px';
-    controlText.innerHTML = text; //'Hide Markers';
-    controlUI.appendChild(controlText);
-
-    return [controlUI, controlText];
-}
-
-function hideMarkers(controlDiv, markers, markerCluster) {
-    var res = addButtonBase(controlDiv, 'Click to hide or show markers', 'Hide Markers');
-    var controlUI = res[0];
-    var controlText = res[1];
-
-    controlUI.addEventListener('click', function() {
-        let hide = true;
-        if (controlText.innerHTML == "Show Markers") {
-            controlText.innerHTML = "Hide Markers";
-        } else {
-            controlText.innerHTML = "Show Markers";
-            hide = false;
-        }
-
-        var arrayLength = markers.length;
-        for (var i = 0; i < arrayLength; i++) {
-            markers[i].setVisible(hide);
-        }
-        markerCluster.render();
-    });
-}
-
-
 function add_marker(map, markers, heatmap_points, data) {
     let latlon = new google.maps.LatLng(data.lat, data.lon)
     heatmap_points.push(latlon)
@@ -150,7 +100,6 @@ class DefaultRenderer implements markerClusterer.Renderer {
       position,
       zIndex,
       title,
-      visible: count > 0,
       icon: {
         url: `data:image/svg+xml;base64,${btoa(svg)}`,
         anchor: new google.maps.Point(25, 25),
@@ -162,12 +111,12 @@ class DefaultRenderer implements markerClusterer.Renderer {
 
 
 function initialize() {
-    var heatmap_points = new google.maps.MVCArray;
-    var markers = [];
+    let heatmap_points = new google.maps.MVCArray;
+    let markers = [];
 
-    var centerlatlng = new google.maps.LatLng(60.208067, 30.526095);
+    let centerlatlng = new google.maps.LatLng(60.208067, 30.526095);
 
-	var myOptions = {
+	let myOptions = {
 		zoom: 4,
 		center: centerlatlng,
 		mapTypeId: google.maps.MapTypeId.ROADMAP
@@ -185,7 +134,7 @@ function initialize() {
     firebase.initializeApp(config);
 
       // Get a reference to the database service
-    var db = firebase.database();
+    let db = firebase.database();
     db.ref('mushrooms').once('value', function(mushrooms) {
         heatmap_points.clear();
         if (markers) {
@@ -205,12 +154,11 @@ function initialize() {
         startControlDiv.setAttribute('horizontal', '');
         startControlDiv.setAttribute('layout', '');
 
-        hideMarkers(startControlDiv, markers, markerCluster);
         map.controls[google.maps.ControlPosition.TOP_RIGHT].push(startControlDiv);
     });
 
     
-	var heatmap = new google.maps.visualization.HeatmapLayer({
+	let heatmap = new google.maps.visualization.HeatmapLayer({
 		data: heatmap_points
 	});
 
