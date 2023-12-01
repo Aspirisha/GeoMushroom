@@ -2,6 +2,9 @@ vk_token: ""
 classifier:
   show_images: false
   model_name: efficientnetv2-s
+redis:
+  host: localhost
+  port: 6379
 sinks: 
 - firebase:   # sink name
   type: firebase

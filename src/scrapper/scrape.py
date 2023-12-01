@@ -29,23 +29,21 @@ from scrapper.util import make_sure_path_exists
 
 TIME_TO_SLEEP = 0.35
 TEMP_DIR = ".tmp"
-CACHE_DIR = ".cache"
 VERSION='5.154'
 
 logger = logging.getLogger('scrapper')
 
 
 class VkScrapper:
-    def __init__(self, vkapi, data_sinks, access_token, classifier_config):
+    def __init__(self, vkapi, data_sinks, access_token, classifier_config, redis_config):
         self.vkapi = vkapi
         self.keywords = {'mushroom', 'bolete', 'fungus'}
         self.group_keywords = {'грибы', 'грибники', 'грибочки', 'лес', 'грибов', 'сбор', 'mushrooms', 'гриб', 'грибалка', 'походы'}
         self.user_albums_keywords = {'грибы', 'грибники', 'грибочки', 'дача', 'лес', 'тихая охота', 'mushrooms'}
-        self._processed_albums_redis = redis.Redis(host='localhost', port=6379, decode_responses=True)
-        self._processed_redis = redis.Redis(host='127.0.0.1', port=6379, db=1, decode_responses=True)
+        self._processed_albums_redis = redis.Redis(host=redis_config['host'], port=redis_config['port'], decode_responses=True)
+        self._processed_redis = redis.Redis(host=redis_config['host'], port=redis_config['port'], db=1, decode_responses=True)
         self._access_token = access_token
         make_sure_path_exists(TEMP_DIR)
-        make_sure_path_exists(CACHE_DIR)
         self.tagger = ImageTagger('.models', classifier_config)
 
         self.processed_users = set()
@@ -270,5 +268,5 @@ if __name__ == "__main__":
     logger.debug('vk api created...')
 
     sinks = build_sinks(config)
-    scrapper = VkScrapper(vkapi, sinks, config["vk_token"], config['classifier'])
+    scrapper = VkScrapper(vkapi, sinks, config["vk_token"], config['classifier'], config['redis'])
     scrapper.get_all_locations()
