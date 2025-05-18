@@ -4,8 +4,10 @@
     "noEmitOnError": true,
     "removeComments": false,
     "sourceMap": true,
-    "target": "es5",
-    "outDir": "dist"
+    "target": "esnext",
+    "outDir": "dist",
+    "module": "NodeNext",
+    "moduleResolution": "nodenext"
   },
   "include": [
     "./*"

@@ -1,9 +1,12 @@
 {
   "dependencies": {
+    "@googlemaps/markerclusterer": "^2.5.3",
     "firebase": "^10.6.0",
     "tsc": "^2.0.4"
   },
   "devDependencies": {
-    "@types/google.maps": "^3.54.9"
+    "@types/google.maps": "^3.54.9",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5"
   }
 }
