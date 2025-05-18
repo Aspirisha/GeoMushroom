@@ -1,22 +1,24 @@
+import { MarkerClusterer } from "@googlemaps/markerclusterer";
+
 function add_marker(map, markers, heatmap_points, data) {
-    let latlon = new google.maps.LatLng(data.lat, data.lon)
-    heatmap_points.push(latlon)
+  let latlon = new google.maps.LatLng(data.lat, data.lon)
+  heatmap_points.push(latlon)
 
-    var infowindow = new google.maps.InfoWindow();
+  var infowindow = new google.maps.InfoWindow();
 
-    let marker = new google.maps.Marker({
-      position: latlon,
-      map: map,
-      visible: true,
-      title: 'Mushroom'
-    });
+  let marker = new google.maps.Marker({
+    position: latlon,
+    map: map,
+    visible: true,
+    title: 'Mushroom'
+  });
 
-    marker.addListener('click', function() {
-      infowindow.setContent('<img src=' + data.url + '>');
-      infowindow.open(map, marker);
-      console.log(marker.position.lat(), marker.position.lng(), data.url);
-    });
-    markers.push(marker);
+  marker.addListener('click', function () {
+    infowindow.setContent('<img src=' + data.url + '>');
+    infowindow.open(map, marker);
+    console.log(marker.position.lat(), marker.position.lng(), data.url);
+  });
+  markers.push(marker);
 }
 
 class DefaultRenderer implements markerClusterer.Renderer {
@@ -62,7 +64,7 @@ class DefaultRenderer implements markerClusterer.Renderer {
     { count, position }: markerClusterer.Cluster,
     stats: markerClusterer.ClusterStats,
     map: google.maps.Map
-  ): Marker {
+  ): google.maps.Marker {
     // change color if this cluster has more markers than the mean cluster
     const color = "#0000ff";
 
@@ -110,61 +112,65 @@ class DefaultRenderer implements markerClusterer.Renderer {
 }
 
 
+// Initialize and add the map
 function initialize() {
-    let heatmap_points = new google.maps.MVCArray;
-    let markers = [];
+  console.log("DDDD");
+ let heatmap_points = new google.maps.MVCArray;
+  let markers = [];
 
-    let centerlatlng = new google.maps.LatLng(60.208067, 30.526095);
+  let centerlatlng = new google.maps.LatLng(60.208067, 30.526095);
 
-	let myOptions = {
-		zoom: 4,
-		center: centerlatlng,
-		mapTypeId: google.maps.MapTypeId.ROADMAP
-	};
+  let myOptions = {
+    zoom: 4,
+    center: centerlatlng,
+    mapTypeId: google.maps.MapTypeId.ROADMAP
+  };
 
-	let map = new google.maps.Map(document.getElementById("map_canvas"), myOptions);
+  let map = new google.maps.Map(document.getElementById("map_canvas"), myOptions);
 
-    var config = {
-        apiKey: "AIzaSyDvLeix43yIMGr6bjkG6ccDeiB-e7qDxHc",
-        authDomain: "geomushroom-186520.firebaseapp.com",
-        databaseURL: "https://geomushroom-186520.firebaseio.com",
-        storageBucket: "geomushroom-186520.appspot.com",
-        serviceAccount: "geomushroom-34720f274ce5.json"
-    };
-    firebase.initializeApp(config);
+  var config = {
+    apiKey: "AIzaSyDvLeix43yIMGr6bjkG6ccDeiB-e7qDxHc",
+    authDomain: "geomushroom-186520.firebaseapp.com",
+    databaseURL: "https://geomushroom-186520.firebaseio.com",
+    storageBucket: "geomushroom-186520.appspot.com",
+    serviceAccount: "geomushroom-34720f274ce5.json"
+  };
+  firebase.initializeApp(config);
 
-      // Get a reference to the database service
-    let db = firebase.database();
-    db.ref('mushrooms').once('value', function(mushrooms) {
-        heatmap_points.clear();
-        if (markers) {
-             for (var i in markers) {
-                 markers[i].setMap(null);
-            }
-        }
+  // Get a reference to the database service
+  let db = firebase.database();
+  db.ref('mushrooms').once('value', function (mushrooms) {
+    heatmap_points.clear();
+    if (markers) {
+      for (var i in markers) {
+        markers[i].setMap(null);
+      }
+    }
 
-        mushrooms.forEach(function(snap) {
-            data = snap.val();
-            add_marker(map, markers, heatmap_points, data);
-        });
-        let renderer = new DefaultRenderer();
-        const markerCluster = new markerClusterer.MarkerClusterer({ markers, map, renderer : renderer });
-
-        let startControlDiv = document.createElement('div');
-        startControlDiv.setAttribute('horizontal', '');
-        startControlDiv.setAttribute('layout', '');
-
-        map.controls[google.maps.ControlPosition.TOP_RIGHT].push(startControlDiv);
+    mushrooms.forEach(function (snap) {
+      let data = snap.val();
+      add_marker(map, markers, heatmap_points, data);
     });
+    let renderer = new DefaultRenderer();
+    const markerCluster = new markerClusterer.MarkerClusterer({ markers, map, renderer: renderer });
 
-    
-	let heatmap = new google.maps.visualization.HeatmapLayer({
-		data: heatmap_points
-	});
+    let startControlDiv = document.createElement('div');
+    startControlDiv.setAttribute('horizontal', '');
+    startControlDiv.setAttribute('layout', '');
 
-    heatmap.setMap(map);
-  	heatmap.set('threshold', 10);
-  	heatmap.set('radius', 30);
-  	heatmap.set('opacity', 0.600000);
-  	heatmap.set('dissipating', true);
+    map.controls[google.maps.ControlPosition.TOP_RIGHT].push(startControlDiv);
+  });
+
+
+  let heatmap = new google.maps.visualization.HeatmapLayer({
+    data: heatmap_points
+  });
+
+  heatmap.setMap(map);
+  heatmap.set('threshold', 10);
+  heatmap.set('radius', 30);
+  heatmap.set('opacity', 0.600000);
+  heatmap.set('dissipating', true);
 }
+
+(window as any).initialize = initialize;
