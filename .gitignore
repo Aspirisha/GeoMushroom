@@ -6,3 +6,5 @@ __pycache__
 src/scrapper/config.yaml
 src/scrapper/credentials
 output
+
+sync_config.jsonc
