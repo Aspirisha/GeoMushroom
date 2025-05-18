@@ -24,7 +24,7 @@ Backend consists of scrapper, which retrives data from vk and should be run befo
 ### How to use client
 * To build client js code
   - Install npm and necessary packages
-  - Run `tsc --outFile ../../docs/geomushroom.js geomushroom.ts` from `src/client` directory
+  - Run `npx vite build` from `src/client` directory. The result artifacts will be output under `docs/` directory.
 * If you want to use own server, you need to change ip hardcoded in docs/geomushroom.js to the one belonging to your server. 
 * Open docs/geomushroom.html. This is the user interface to control scrapper. 
 
