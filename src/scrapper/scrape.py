@@ -12,7 +12,7 @@ import sys
 # temporary solution until proper deployment is done
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
-from os.path import join, exists
+from os.path import join
 from urllib import request
 from scrapper.firebase_sink import FirebaseSink
 from scrapper.postgres_sink import PostgresSink
@@ -214,8 +214,9 @@ class VkScrapper:
             return None
 
         image_path = join(TEMP_DIR, 'img.jpg')
+        req = request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with open(image_path, 'wb') as f:
-            f.write(request.urlopen(url).read())
+            f.write(request.urlopen(req).read())
 
         self._processed_redis.set(h, 1)
         return self.tagger.run_inference_on_image(image_path)

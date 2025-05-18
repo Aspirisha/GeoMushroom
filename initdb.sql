@@ -1,3 +1,4 @@
+\c mushrooms;
 DROP TABLE IF EXISTS Mushrooms;
 
 CREATE TABLE Mushrooms (

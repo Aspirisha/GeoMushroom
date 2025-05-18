@@ -13,5 +13,6 @@ matplotlib
 psycopg2-binary
 geopy
 pytest
+pyyaml
 redis
 gmplot

@@ -18,6 +18,7 @@ Backend consists of scrapper, which retrives data from vk and should be run befo
   - If you want to store results in firebase, create firebase db.
   - For postgres sink, to initialize database you can use `initdb.sql` from the root directory: `psql -a -f initdb.sql`
     * Note however, that postgres sink is not yet ready to be used on client side :) 
+    * Install corresponding postgis extension (like postgresql-15-postgis)
 * Setup data sinks configuration in previously copied `config.yaml`
 * Perform data retrivement from vk by calling `./scrapper.py`
 
