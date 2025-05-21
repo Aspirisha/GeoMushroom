@@ -87,12 +87,13 @@ class VkScrapper:
         for album in albums['items']:
             if self._is_album_processed(album):
                 logger.info(f'Album {album["id"]} is already processed')
+                time.sleep(TIME_TO_SLEEP)
                 continue
 
             try:
                 photos = self._api_call(self.vkapi.photos.get, owner_id=owner, album_id=album['id'], extended=True)
             except Exception as e:
-                print('Got', e)
+                logger.error('Got error while fetching photos: %s', e)
                 raise
             if not photos:
                 continue
@@ -216,7 +217,16 @@ class VkScrapper:
         image_path = join(TEMP_DIR, 'img.jpg')
         req = request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with open(image_path, 'wb') as f:
-            f.write(request.urlopen(req).read())
+            for i in range(3):
+                try:
+                    f.write(request.urlopen(req).read())
+                    break
+                except Exception as e:
+                    logger.error("Failed to download image: %s from %s; trying again in 1 second...", e, url)
+                    time.sleep(1)
+                    if i == 2:
+                        logger.error("Failed to download image from %s after 3 attempts", url)
+                        return None
 
         self._processed_redis.set(h, 1)
         return self.tagger.run_inference_on_image(image_path)
